@@ -12,27 +12,31 @@ st.title("🏗️ 서원건설")
 st.subheader("공사 내역서 단가 자동 입력기")
 st.sidebar.markdown("---")
 st.sidebar.markdown("**만든이: 유강진 대리**")
+st.sidebar.markdown("---")
 
-# 3. 구글 시트(마스터 데이터) 실시간 로드
+# 3. 설정 탭 (사이드바)
+st.sidebar.header("⚙️ 설정 및 관리")
+start_row = st.sidebar.number_input("데이터 시작 행", value=2, min_value=1)
+col_name = st.sidebar.number_input("품명(A) 열 번호", value=1, min_value=1)
+col_spec = st.sidebar.number_input("규격(B) 열 번호", value=2, min_value=1)
+col_e = st.sidebar.number_input("단가1(E) 열 번호", value=5, min_value=1)
+col_g = st.sidebar.number_input("단가2(G) 열 번호", value=7, min_value=1)
+col_i = st.sidebar.number_input("단가3(I) 열 번호", value=9, min_value=1)
+
+# 4. 구글 시트(마스터 데이터) 로드
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
 
 @st.cache_data(ttl=60) 
 def load_master_data():
     try:
-        # header=None 추가: 첫 줄을 제목으로 보지 않고 데이터로 읽어들임
         df = pd.read_csv(GOOGLE_SHEET_URL, header=None)
-        
-        if df.empty:
-            return "시트에 데이터가 없습니다."
+        if df.empty: return "데이터 없음"
         
         master_data = {}
         for _, row in df.iterrows():
-            # 첫번째(A), 두번째(B) 열로 키 생성 (0번, 1번 인덱스)
             name = str(row[0]).strip() if pd.notnull(row[0]) else ""
             spec = str(row[1]).strip() if pd.notnull(row[1]) else ""
             key = f"{name}_{spec}"
-            
-            # E(5번째열=인덱스4), G(7번째열=인덱스6), I(9번째열=인덱스8)
             master_data[key] = {
                 'E': row[4] if len(row) > 4 else None,
                 'G': row[6] if len(row) > 6 else None,
@@ -40,46 +44,42 @@ def load_master_data():
             }
         return master_data
     except Exception as e:
-        return f"Error: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+        return f"Error: {str(e)}"
 
-# 데이터 로드 실행
-result = load_master_data()
+master_data = load_master_data()
 
-if isinstance(result, str):
-    st.error(f"마스터 데이터를 불러오는 중 오류 발생: {result}")
+if isinstance(master_data, str):
+    st.error(f"마스터 데이터 로드 오류: {master_data}")
     master_data = None
-else:
-    master_data = result
 
-# 4. 파일 업로드 및 시트 선택
+# 5. 파일 업로드 및 실행
 uploaded_file = st.file_uploader("작업할 내역서 엑셀 파일을 업로드하세요", type=['xlsx'])
 
 if uploaded_file and master_data:
     try:
         wb = openpyxl.load_workbook(uploaded_file)
-        sheet_names = wb.sheetnames
-        
-        selected_sheet = st.selectbox("수정할 시트를 선택하세요", sheet_names)
+        selected_sheet = st.selectbox("수정할 시트를 선택하세요", wb.sheetnames)
         ws = wb[selected_sheet]
 
         if st.button("단가 자동 입력 실행"):
             count = 0
-            for row in range(2, ws.max_row + 1): 
-                val_a = ws.cell(row=row, column=1).value
-                val_b = ws.cell(row=row, column=2).value
+            # 설정된 시작 행부터 끝까지 반복
+            for row in range(start_row, ws.max_row + 1): 
+                val_name = ws.cell(row=row, column=col_name).value
+                val_spec = ws.cell(row=row, column=col_spec).value
                 
-                name = str(val_a).strip() if val_a is not None else ""
-                spec = str(val_b).strip() if val_b is not None else ""
+                name = str(val_name).strip() if val_name is not None else ""
+                spec = str(val_spec).strip() if val_spec is not None else ""
                 current_key = f"{name}_{spec}"
                 
                 if current_key in master_data:
-                    # E(5), G(7), I(9) 열 값 수정
+                    # 설정된 열 번호에 값 대입
                     if master_data[current_key]['E'] is not None:
-                        ws.cell(row=row, column=5).value = master_data[current_key]['E']
+                        ws.cell(row=row, column=col_e).value = master_data[current_key]['E']
                     if master_data[current_key]['G'] is not None:
-                        ws.cell(row=row, column=7).value = master_data[current_key]['G']
+                        ws.cell(row=row, column=col_g).value = master_data[current_key]['G']
                     if master_data[current_key]['I'] is not None:
-                        ws.cell(row=row, column=9).value = master_data[current_key]['I']
+                        ws.cell(row=row, column=col_i).value = master_data[current_key]['I']
                     count += 1
             
             st.success(f"성공! {count}개의 항목이 업데이트되었습니다.")
