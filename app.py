@@ -4,6 +4,7 @@ import openpyxl
 from io import BytesIO
 from openpyxl.utils import column_index_from_string
 from datetime import datetime
+from openpyxl.styles import Alignment # 추가된 임포트
 
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
@@ -92,16 +93,34 @@ if uploaded_file and master_data:
                 st.error("CSV 직접 수정은 서식 파괴 위험이 있어 .xlsx 파일 사용을 권장합니다.")
             else:
                 count = 0
+                # 정렬 및 서식 스타일 설정
+                right_align = Alignment(horizontal='right')
+                number_fmt = '#,##0'
+
                 for row in range(start_row, ws.max_row + 1):
                     val_a = str(ws.cell(row=row, column=c_name).value or "").strip()
                     val_b = str(ws.cell(row=row, column=c_spec).value or "").strip()
                     key = f"{val_a}_{val_b}"
                     
                     if key in master_data:
-                        # 서식 유지(값만 변경)
-                        ws.cell(row=row, column=c_mat).value = master_data[key]['E']
-                        ws.cell(row=row, column=c_lab).value = master_data[key]['G']
-                        ws.cell(row=row, column=c_exp).value = master_data[key]['I']
+                        # 1. 재료비 처리
+                        cell_mat = ws.cell(row=row, column=c_mat)
+                        cell_mat.value = float(str(master_data[key]['E']).replace(',', ''))
+                        cell_mat.number_format = number_fmt
+                        cell_mat.alignment = right_align
+                        
+                        # 2. 노무비 처리
+                        cell_lab = ws.cell(row=row, column=c_lab)
+                        cell_lab.value = float(str(master_data[key]['G']).replace(',', ''))
+                        cell_lab.number_format = number_fmt
+                        cell_lab.alignment = right_align
+                        
+                        # 3. 경비 처리
+                        cell_exp = ws.cell(row=row, column=c_exp)
+                        cell_exp.value = float(str(master_data[key]['I']).replace(',', ''))
+                        cell_exp.number_format = number_fmt
+                        cell_exp.alignment = right_align
+                        
                         count += 1
                 
                 st.success(f"완료! 총 {count}개의 항목에 단가가 입력되었습니다.")
