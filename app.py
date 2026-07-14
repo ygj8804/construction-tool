@@ -8,17 +8,21 @@ from datetime import datetime
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
-# 마스터 데이터 경로
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
+# [중요] 수정이 필요한 주소들
+# DATA_URL: 프로그램이 데이터를 읽어오는 전용 주소 (기존 주소 그대로 사용)
+DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
+# EDIT_URL: 유 대리님이 수정할 때 쓰는 웹 주소 (브라우저 주소창 주소를 여기에 복사하세요)
+EDIT_URL = "https://docs.google.com/spreadsheets/d/본인의_스프레드시트_ID_주소를_여기에_넣으세요"
 
-# 제목 및 상단 정보 (수정하기 버튼 추가)
+# 제목 및 상단 정보
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
 
 col_info, col_btn = st.columns([0.6, 0.4])
 with col_info:
-    st.info(f"📋 마스터파일 {datetime.now().strftime('%Y-%m-%d')}")
+    st.info(f"📋 마스터 데이터 기준: {datetime.now().strftime('%Y-%m-%d')}")
 with col_btn:
-    st.link_button("마스터파일 수정하기 ↗️", GOOGLE_SHEET_URL)
+    # 수정: 다운로드 링크가 아니라 수정용 링크로 변경
+    st.link_button("단가 수정하기 ↗️", EDIT_URL)
 
 st.markdown("---")
 
@@ -48,7 +52,7 @@ with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 
 @st.cache_data(ttl=60)
 def load_master_data():
     try:
-        df = pd.read_csv(GOOGLE_SHEET_URL, header=None)
+        df = pd.read_csv(DATA_URL, header=None)
         master_data = {}
         for _, row in df.iterrows():
             key = f"{str(row[0]).strip()}_{str(row[1]).strip()}"
@@ -61,15 +65,11 @@ master_data = load_master_data()
 # 4. 파일 업로드 및 기능 실행
 st.markdown("---")
 uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls', 'csv'])
-
-# 저장할 확장자 선택
 file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx", "csv"])
 
 if uploaded_file and master_data:
     try:
-        # 파일 처리를 위해 확장자 구분
         if uploaded_file.name.endswith('.csv'):
-            df_input = pd.read_csv(uploaded_file)
             st.warning("CSV 파일은 셀 서식이 유지되지 않을 수 있습니다.")
         else:
             wb = openpyxl.load_workbook(uploaded_file)
