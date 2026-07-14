@@ -11,28 +11,28 @@ st.title("🏗️ 서원건설 - 단가 자동 입력기")
 st.markdown("---")
 
 # 2. 정갈한 설정창
-with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목 열 위치 설정", expanded=True):
+with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 (열) 입력", expanded=True):
     # 1단 구성: 행 설정
-    st.subheader("1. 데이터 시작 행 설정")
-    start_row = st.number_input("데이터가 실제로 시작되는 행 번호를 입력하세요 (예: 4)", value=4, min_value=1)
+    st.subheader("1. 데이터 시작 행")
+    start_row = st.number_input("데이터가 실제로 시작되는 행 번호", value=4, min_value=1)
     
     st.markdown("---")
     
     # 2단 구성: 열(Column) 설정
-    st.subheader("2. 각 항목별 열(Column) 위치 (알파벳 입력)")
+    st.subheader("2. 각 항목별 위치 (열) 입력 (알파벳 입력)")
     col1, col2 = st.columns(2)
     
     with col1:
         st.write("**기본 항목**")
-        col_name_str = st.text_input("품명 (열 위치)", value="A")
-        col_spec_str = st.text_input("규격 (열 위치)", value="B")
-        col_unit_str = st.text_input("단위 (열 위치)", value="C")
+        col_name_str = st.text_input("품명 (열)", value="A")
+        col_spec_str = st.text_input("규격 (열)", value="B")
+        col_unit_str = st.text_input("단위 (열)", value="C")
         
     with col2:
         st.write("**단가 데이터 입력 위치**")
-        col_mat_str = st.text_input("재료비단가 (열 위치)", value="E")
-        col_lab_str = st.text_input("노무비단가 (열 위치)", value="G")
-        col_exp_str = st.text_input("경비단가 (열 위치)", value="I")
+        col_mat_str = st.text_input("재료비단가 (열)", value="E")
+        col_lab_str = st.text_input("노무비단가 (열)", value="G")
+        col_exp_str = st.text_input("경비단가 (열)", value="I")
 
 # 3. 마스터 데이터 로드
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
@@ -52,7 +52,10 @@ master_data = load_master_data()
 
 # 4. 파일 업로드 및 기능 실행
 st.markdown("---")
-uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx'])
+uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls'])
+
+# 저장할 확장자 선택
+file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx"])
 
 if uploaded_file and master_data:
     try:
@@ -86,7 +89,11 @@ if uploaded_file and master_data:
             output = BytesIO()
             wb.save(output)
             output.seek(0)
-            st.download_button("수정된 파일 다운로드", output, f"매칭완료_{uploaded_file.name}")
+            st.download_button(
+                label=f"수정된 파일 다운로드 ({file_ext})", 
+                data=output, 
+                file_name=f"매칭완료_{uploaded_file.name.split('.')[0]}.{file_ext}"
+            )
             
     except Exception as e:
         st.error(f"오류: 설정한 열 위치(알파벳)가 올바른지 확인해주세요. 상세: {e}")
