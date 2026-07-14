@@ -31,7 +31,7 @@ st.title("🏗️ 서원건설 - 단가 관리 시스템")
 
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
-# --- [탭 1] 단가 자동 입력 ---
+# --- [탭 1] ---
 with tab1:
     with st.expander("⚙️ [설정] 데이터 위치 옵션", expanded=True):
         col1, col2 = st.columns(2)
@@ -49,7 +49,6 @@ with tab1:
     if uploaded_file:
         wb = openpyxl.load_workbook(uploaded_file)
         ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames)
-        # 파일 업로드 후 확장자 선택창 출력
         file_ext = st.selectbox("저장할 확장자", [".xlsx", ".xls"])
         
         if st.button("단가 매칭 실행"):
@@ -75,23 +74,24 @@ with tab1:
                     
                     if not match.empty:
                         row_idx = i + 1
-                        # 지정한 열(E, G, I)만 타겟팅
-                        targets = [(col_mat, match['재료비'].values[0]), (col_lab, match['노무비'].values[0]), (col_exp, match['경비'].values[0])]
+                        val_m = match['재료비'].values[0]
+                        val_l = match['노무비'].values[0]
+                        val_e = match['경비'].values[0]
                         
-                        for col_char, val in targets:
-                            cell = ws[f"{col_char.upper()}{row_idx}"]
-                            # 수식이 있으면 skip, 없으면 값 대입
-                            if cell.data_type != 'f':
-                                cell.value = val
+                        # [절대 보호] 정확히 입력받은 열만 수정
+                        for char, val in [(col_mat, val_m), (col_lab, val_l), (col_exp, val_e)]:
+                            target_cell = ws[f"{char.upper()}{row_idx}"]
+                            if target_cell.data_type != 'f': # 수식이면 절대 건드리지 않음
+                                target_cell.value = val
                         match_count += 1
                 
                 output = BytesIO()
                 wb.save(output)
-                st.success(f"🎉 단가 매칭 완료! (총 {match_count}개 항목 반영됨)")
+                st.success(f"🎉 단가 매칭 완료! (총 {match_count}개 항목)")
                 st.download_button("결과 파일 다운로드", output.getvalue(), file_name=f"매칭완료{file_ext}")
             except Exception as e: st.error(f"오류: {e}")
 
-# --- [탭 2] 신규 단가 데이터 정리기 ---
+# --- [탭 2] ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
     n_mat = st.text_input("외부 재료비 열", value="D")
@@ -101,6 +101,4 @@ with tab2:
     new_file = st.file_uploader("지자체 양식 업로드", type=['xlsx', 'xls'])
     if new_file:
         if st.button("마스터 시트에 추가"):
-            df_new = pd.read_excel(new_file, header=None)
-            # 여기는 기존 구조 유지
             st.success("데이터 확인 완료 후 추가됩니다.")
