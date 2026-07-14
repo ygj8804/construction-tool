@@ -31,10 +31,8 @@ DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfF
 
 st.title("🏗️ 서원건설 - 단가 관리 시스템")
 
-# 4. 탭 정의
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
-# --- [탭 1] 단가 자동 입력 ---
 with tab1:
     col_info, col_btn = st.columns([0.6, 0.4])
     with col_info:
@@ -62,47 +60,51 @@ with tab1:
         
         if st.button("단가 매칭 실행", type="primary"):
             try:
-                # 마스터 데이터 로드
+                # 데이터 불러오기
                 master_df = pd.read_csv(DATA_URL)
                 
-                # 엑셀 파일 데이터를 안전하게 읽기 위해 Pandas 활용
-                uploaded_file.seek(0)
-                df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
+                # [중요 체크] 마스터 시트에 필요한 열이 있는지 확인
+                required_cols = ['품명', '규격', '재료비', '노무비', '경비']
+                missing_cols = [c for c in required_cols if c not in master_df.columns]
                 
-                # 매칭 루프
-                for i in range(start_row - 1, len(df_ex)):
-                    row_idx = i + 1
+                if missing_cols:
+                    st.error(f"오류: 마스터 시트에 다음 열이 없습니다: {missing_cols}")
+                    st.write("현재 마스터 시트에서 인식한 열 목록:", master_df.columns.tolist())
+                    st.write("구글 시트의 첫 번째 줄(헤더)에 정확히 해당 이름들이 있는지 확인해 주세요.")
+                else:
+                    # 엑셀 파일 안전하게 읽기
+                    uploaded_file.seek(0)
+                    df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
                     
-                    # 열 문자 -> 숫자 인덱스 변환
-                    idx_name = column_index_from_string(col_name.upper()) - 1
-                    idx_spec = column_index_from_string(col_spec.upper()) - 1
+                    for i in range(start_row - 1, len(df_ex)):
+                        row_idx = i + 1
+                        idx_name = column_index_from_string(col_name.upper()) - 1
+                        idx_spec = column_index_from_string(col_spec.upper()) - 1
+                        
+                        val_name = str(df_ex.iloc[i, idx_name])
+                        val_spec = str(df_ex.iloc[i, idx_spec])
+                        
+                        match = master_df[(master_df['품명'].astype(str) == val_name) & (master_df['규격'].astype(str) == val_spec)]
+                        
+                        if not match.empty:
+                            ws[f"{col_mat}{row_idx}"] = match['재료비'].values[0]
+                            ws[f"{col_lab}{row_idx}"] = match['노무비'].values[0]
+                            ws[f"{col_exp}{row_idx}"] = match['경비'].values[0]
                     
-                    val_name = str(df_ex.iloc[i, idx_name])
-                    val_spec = str(df_ex.iloc[i, idx_spec])
+                    output = BytesIO()
+                    wb.save(output)
+                    output.seek(0)
                     
-                    # 마스터 데이터에서 찾기
-                    match = master_df[(master_df['품명'].astype(str) == val_name) & (master_df['규격'].astype(str) == val_spec)]
-                    
-                    if not match.empty:
-                        # 서식 유지하며 값만 입력
-                        ws[f"{col_mat}{row_idx}"] = match['재료비'].values[0]
-                        ws[f"{col_lab}{row_idx}"] = match['노무비'].values[0]
-                        ws[f"{col_exp}{row_idx}"] = match['경비'].values[0]
-                
-                # 결과 저장
-                output = BytesIO()
-                wb.save(output)
-                output.seek(0)
-                
-                st.success("🎉 단가 매칭이 완료되었습니다!")
-                st.download_button("결과 파일 다운로드 (서식 유지)", output, f"매칭완료_{uploaded_file.name}", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                wb.close()
+                    st.success("🎉 단가 매칭이 완료되었습니다!")
+                    st.download_button("결과 파일 다운로드 (서식 유지)", output, f"매칭완료_{uploaded_file.name}", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    wb.close()
             except Exception as e:
-                st.error(f"오류 발생: {e}")
+                st.error(f"예기치 않은 오류 발생: {e}")
 
-# --- [탭 2] 신규 단가 파일 정리 ---
+# --- [탭 2] ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
+    # (탭 2 내용은 기존과 동일하므로 생략하거나 유지하시면 됩니다)
     with st.expander("⚙️ [설정] 외부 파일의 열 위치 확인", expanded=True):
         n1, n2 = st.columns(2)
         with n1:
