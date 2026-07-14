@@ -9,9 +9,7 @@ from datetime import datetime
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
 # [데이터 연결 주소]
-# DATA_URL: 데이터 불러오기 전용 (기존 CSV 게시 주소 그대로 사용)
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
-# EDIT_URL: 마스터 시트 편집용 주소 (알려주신 주소 적용 완료)
 EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt/edit?rtpof=true"
 
 # 제목 및 상단 정보
@@ -70,15 +68,19 @@ st.markdown("---")
 uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls', 'csv'])
 file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx", "csv"])
 
+# [추가된 시트 선택 로직]
+ws = None
 if uploaded_file and master_data:
     try:
         if uploaded_file.name.endswith('.csv'):
             st.warning("CSV 파일은 셀 서식이 유지되지 않을 수 있습니다.")
         else:
             wb = openpyxl.load_workbook(uploaded_file)
-            ws = wb[wb.sheetnames[0]]
+            # 시트 선택 기능 추가
+            selected_sheet = st.selectbox("작업할 시트를 선택하세요", wb.sheetnames)
+            ws = wb[selected_sheet]
 
-        if st.button("단가 매칭 실행", type="primary"):
+        if ws and st.button("단가 매칭 실행", type="primary"):
             c_name = column_index_from_string(col_name_str.upper())
             c_spec = column_index_from_string(col_spec_str.upper())
             c_mat = column_index_from_string(col_mat_str.upper())
@@ -90,8 +92,8 @@ if uploaded_file and master_data:
             else:
                 count = 0
                 for row in range(start_row, ws.max_row + 1):
-                    val_a = str(ws.cell(row=row, column=c_name).value).strip()
-                    val_b = str(ws.cell(row=row, column=c_spec).value).strip()
+                    val_a = str(ws.cell(row=row, column=c_name).value or "").strip()
+                    val_b = str(ws.cell(row=row, column=c_spec).value or "").strip()
                     key = f"{val_a}_{val_b}"
                     
                     if key in master_data:
