@@ -6,15 +6,15 @@ from openpyxl.utils import column_index_from_string
 import gspread
 from google.oauth2.service_account import Credentials
 
-# 1. 페이지 설정
+# 페이지 설정
 st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
 
-# [함수] 글자 정규화
+# 글자 정규화
 def normalize_text(text):
     if pd.isna(text): return ""
     return str(text).replace(" ", "").replace("\t", "").replace("\n", "").replace("\r", "")
 
-# [함수] 구글 시트 연동
+# 구글 시트 연동
 def append_to_master(df):
     creds_dict = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
@@ -49,6 +49,7 @@ with tab1:
     if uploaded_file:
         wb = openpyxl.load_workbook(uploaded_file)
         ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames)
+        # 파일 업로드 후 확장자 선택창 출력
         file_ext = st.selectbox("저장할 확장자", [".xlsx", ".xls"])
         
         if st.button("단가 매칭 실행"):
@@ -63,41 +64,43 @@ with tab1:
                 df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
                 
                 match_count = 0
-                c_n, c_s = column_index_from_string(col_name.upper()) - 1, column_index_from_string(col_spec.upper()) - 1
+                c_n = column_index_from_string(col_name.upper()) - 1
+                c_s = column_index_from_string(col_spec.upper()) - 1
                 
                 for i in range(start_row - 1, len(df_ex)):
-                    v_n, v_s = normalize_text(df_ex.iloc[i, c_n]), normalize_text(df_ex.iloc[i, c_s])
+                    v_n = normalize_text(df_ex.iloc[i, c_n])
+                    v_s = normalize_text(df_ex.iloc[i, c_s])
+                    
                     match = raw_df[(raw_df['clean_name'] == v_n) & (raw_df['clean_spec'] == v_s)]
                     
                     if not match.empty:
                         row_idx = i + 1
+                        # 지정한 열(E, G, I)만 타겟팅
                         targets = [(col_mat, match['재료비'].values[0]), (col_lab, match['노무비'].values[0]), (col_exp, match['경비'].values[0])]
                         
                         for col_char, val in targets:
                             cell = ws[f"{col_char.upper()}{row_idx}"]
-                            # [핵심] 수식이 있으면 절대 덮어쓰지 않음
+                            # 수식이 있으면 skip, 없으면 값 대입
                             if cell.data_type != 'f':
                                 cell.value = val
                         match_count += 1
                 
                 output = BytesIO()
                 wb.save(output)
-                st.success(f"매칭 완료! ({match_count}개 항목)")
+                st.success(f"🎉 단가 매칭 완료! (총 {match_count}개 항목 반영됨)")
                 st.download_button("결과 파일 다운로드", output.getvalue(), file_name=f"매칭완료{file_ext}")
             except Exception as e: st.error(f"오류: {e}")
 
 # --- [탭 2] 신규 단가 데이터 정리기 ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
-    n_mat = st.text_input("외부 재료비 열 (A-Z)", value="D")
-    n_lab = st.text_input("외부 노무비 열 (A-Z)", value="E")
-    n_exp = st.text_input("외부 경비 열 (A-Z)", value="F")
+    n_mat = st.text_input("외부 재료비 열", value="D")
+    n_lab = st.text_input("외부 노무비 열", value="E")
+    n_exp = st.text_input("외부 경비 열", value="F")
     
     new_file = st.file_uploader("지자체 양식 업로드", type=['xlsx', 'xls'])
     if new_file:
         if st.button("마스터 시트에 추가"):
             df_new = pd.read_excel(new_file, header=None)
-            # 지정한 열만 정확히 추출
-            c_m, c_l, c_e = column_index_from_string(n_mat.upper())-1, column_index_from_string(n_lab.upper())-1, column_index_from_string(n_exp.upper())-1
-            # (이 부분은 사용자 요청대로 원본 유지하고, 열만 정확히 매칭)
+            # 여기는 기존 구조 유지
             st.success("데이터 확인 완료 후 추가됩니다.")
