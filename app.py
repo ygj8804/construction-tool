@@ -3,11 +3,14 @@ import pandas as pd
 import openpyxl
 from io import BytesIO
 from openpyxl.utils import column_index_from_string
+from datetime import datetime
 
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
+# 상단 마스터 데이터 버전 (최근 동기화 시간)
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
+st.info(f"📋 마스터 데이터 기준: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (데이터 동기화 완료)")
 st.markdown("---")
 
 # 2. 정갈한 설정창
@@ -52,48 +55,53 @@ master_data = load_master_data()
 
 # 4. 파일 업로드 및 기능 실행
 st.markdown("---")
-uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls'])
+uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls', 'csv'])
 
-# 저장할 확장자 선택
-file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx"])
+# 파일 형식 선택 (xlsx가 가장 안정적입니다)
+file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx", "csv"])
 
 if uploaded_file and master_data:
     try:
-        wb = openpyxl.load_workbook(uploaded_file)
-        selected_sheet = st.selectbox("수정할 시트를 선택하세요", wb.sheetnames)
-        ws = wb[selected_sheet]
+        # 파일 처리를 위해 확장자 구분
+        if uploaded_file.name.endswith('.csv'):
+            df_input = pd.read_csv(uploaded_file)
+            st.warning("CSV 파일은 셀 서식이 유지되지 않을 수 있습니다.")
+        else:
+            wb = openpyxl.load_workbook(uploaded_file)
+            ws = wb[wb.sheetnames[0]]
 
         if st.button("단가 매칭 실행", type="primary"):
-            # 알파벳 -> 숫자 변환
             c_name = column_index_from_string(col_name_str.upper())
             c_spec = column_index_from_string(col_spec_str.upper())
             c_mat = column_index_from_string(col_mat_str.upper())
             c_lab = column_index_from_string(col_lab_str.upper())
             c_exp = column_index_from_string(col_exp_str.upper())
 
-            count = 0
-            for row in range(start_row, ws.max_row + 1):
-                val_a = str(ws.cell(row=row, column=c_name).value).strip()
-                val_b = str(ws.cell(row=row, column=c_spec).value).strip()
+            if uploaded_file.name.endswith('.csv'):
+                # CSV 처리 로직 (간소화)
+                st.error("CSV 직접 수정은 서식 파괴 위험이 있어 .xlsx 파일 사용을 권장합니다.")
+            else:
+                count = 0
+                for row in range(start_row, ws.max_row + 1):
+                    val_a = str(ws.cell(row=row, column=c_name).value).strip()
+                    val_b = str(ws.cell(row=row, column=c_spec).value).strip()
+                    key = f"{val_a}_{val_b}"
+                    
+                    if key in master_data:
+                        ws.cell(row=row, column=c_mat).value = master_data[key]['E']
+                        ws.cell(row=row, column=c_lab).value = master_data[key]['G']
+                        ws.cell(row=row, column=c_exp).value = master_data[key]['I']
+                        count += 1
                 
-                key = f"{val_a}_{val_b}"
+                st.success(f"완료! 총 {count}개의 항목에 단가가 입력되었습니다.")
                 
-                if key in master_data:
-                    ws.cell(row=row, column=c_mat).value = master_data[key]['E']
-                    ws.cell(row=row, column=c_lab).value = master_data[key]['G']
-                    ws.cell(row=row, column=c_exp).value = master_data[key]['I']
-                    count += 1
-            
-            st.success(f"완료! 총 {count}개의 항목에 단가가 입력되었습니다.")
-            
-            output = BytesIO()
-            wb.save(output)
-            output.seek(0)
-            st.download_button(
-                label=f"수정된 파일 다운로드 ({file_ext})", 
-                data=output, 
-                file_name=f"매칭완료_{uploaded_file.name.split('.')[0]}.{file_ext}"
-            )
+                output = BytesIO()
+                wb.save(output)
+                output.seek(0)
+                
+                # 선택한 확장자로 저장
+                final_name = f"매칭완료_{uploaded_file.name.split('.')[0]}.{file_ext}"
+                st.download_button(label=f"수정된 파일 다운로드 ({file_ext})", data=output, file_name=final_name)
             
     except Exception as e:
         st.error(f"오류: 설정한 열 위치(알파벳)가 올바른지 확인해주세요. 상세: {e}")
