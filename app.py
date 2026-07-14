@@ -12,32 +12,37 @@ st.subheader("공사 내역서 단가 자동 입력기")
 st.sidebar.markdown("---")
 st.sidebar.markdown("**만든이: 유강진 대리**")
 
-# 3. 마스터 파일 로드
-try:
-    # 깃허브에 올려둔 마스터 파일 (master_price.xlsx)을 불러옵니다.
-    master_wb = openpyxl.load_workbook('master_price.xlsx', data_only=True)
-    master_ws = master_wb.active
-    
-    # 마스터 데이터를 딕셔너리로 변환 (빠른 검색을 위해)
-    # 예: A열(품명)을 키(key)로, E, G, I열 값을 밸류(value)로 저장한다고 가정합니다.
-    # [주의] 이 부분은 실제 엑셀 양식에 맞춰 수정이 필요합니다.
-    master_data = {}
-    for row in range(2, master_ws.max_row + 1):
-        key = str(master_ws.cell(row=row, column=1).value) # 1열(A)을 기준으로 매칭
-        master_data[key] = {
-            'E': master_ws.cell(row=row, column=5).value, # 5열(E)
-            'G': master_ws.cell(row=row, column=7).value, # 7열(G)
-            'I': master_ws.cell(row=row, column=9).value  # 9열(I)
-        }
-except Exception as e:
-    st.error(f"마스터 파일을 불러오는 중 오류가 발생했습니다: {e}")
-    st.stop()
+# 3. 구글 시트(마스터 데이터) 실시간 로드
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
+
+@st.cache_data(ttl=60) 
+def load_master_data():
+    try:
+        df = pd.read_csv(GOOGLE_SHEET_URL)
+        # 품명(A열) + 규격(B열)을 합쳐서 하나의 고유 키로 생성
+        master_data = {}
+        for _, row in df.iterrows():
+            # A열(인덱스 0)과 B열(인덱스 1)을 합쳐서 키 생성
+            name = str(row[0]).strip() if pd.notnull(row[0]) else ""
+            spec = str(row[1]).strip() if pd.notnull(row[1]) else ""
+            key = f"{name}_{spec}"
+            
+            master_data[key] = {
+                'E': row[4] if pd.notnull(row[4]) else None, # 5열(E)
+                'G': row[6] if pd.notnull(row[6]) else None, # 7열(G)
+                'I': row[8] if pd.notnull(row[8]) else None  # 9열(I)
+            }
+        return master_data
+    except Exception as e:
+        st.error(f"마스터 데이터를 불러오는 중 오류 발생: {e}")
+        return None
+
+master_data = load_master_data()
 
 # 4. 파일 업로드 및 시트 선택
 uploaded_file = st.file_uploader("작업할 내역서 엑셀 파일을 업로드하세요", type=['xlsx'])
 
-if uploaded_file:
-    # 엑셀 파일 열기 (수식 유지)
+if uploaded_file and master_data:
     wb = openpyxl.load_workbook(uploaded_file)
     sheet_names = wb.sheetnames
     
@@ -45,26 +50,32 @@ if uploaded_file:
     ws = wb[selected_sheet]
 
     if st.button("단가 자동 입력 실행"):
-        # E(5), G(7), I(9) 열 수정 로직
         count = 0
-        for row in range(2, ws.max_row + 1): # 2행부터 데이터가 있다고 가정
-            item_name = str(ws.cell(row=row, column=1).value) # A열 기준으로 검색
+        # A열과 B열을 읽어서 마스터 데이터 키와 비교
+        for row in range(2, ws.max_row + 1): 
+            val_a = ws.cell(row=row, column=1).value # A열
+            val_b = ws.cell(row=row, column=2).value # B열
             
-            if item_name in master_data:
-                # E, G, I 열만 수정 (다른 열과 수식은 건드리지 않음)
-                ws.cell(row=row, column=5).value = master_data[item_name]['E'] # E열
-                ws.cell(row=row, column=7).value = master_data[item_name]['G'] # G열
-                ws.cell(row=row, column=9).value = master_data[item_name]['I'] # I열
+            name = str(val_a).strip() if val_a is not None else ""
+            spec = str(val_b).strip() if val_b is not None else ""
+            current_key = f"{name}_{spec}"
+            
+            if current_key in master_data:
+                # E(5), G(7), I(9) 열만 값 수정
+                if master_data[current_key]['E'] is not None:
+                    ws.cell(row=row, column=5).value = master_data[current_key]['E']
+                if master_data[current_key]['G'] is not None:
+                    ws.cell(row=row, column=7).value = master_data[current_key]['G']
+                if master_data[current_key]['I'] is not None:
+                    ws.cell(row=row, column=9).value = master_data[current_key]['I']
                 count += 1
         
         st.success(f"성공! {count}개의 항목이 업데이트되었습니다.")
 
-        # 파일 저장
         output = BytesIO()
         wb.save(output)
         output.seek(0)
         
-        # 다운로드 버튼
         st.download_button(
             label="수정된 파일 다운로드",
             data=output,
