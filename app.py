@@ -10,19 +10,19 @@ st.title("🏗️ 서원건설")
 st.subheader("공사 내역서 단가 자동 입력기")
 st.markdown("---")
 
-# 2. 상단 설정 창 (이곳에서 정한 숫자가 실제 매칭 기준이 됩니다)
-with st.expander("⚙️ 엑셀 파일 열 위치 설정 (설정한 열에 맞춰 작업합니다)", expanded=True):
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        start_row = st.number_input("데이터 시작 행", value=2, min_value=1)
-        col_name = st.number_input("품명(A) 열", value=1, min_value=1)
-        col_spec = st.number_input("규격(B) 열", value=2, min_value=1)
-    with col2:
-        col_unit = st.number_input("단위(C) 열", value=3, min_value=1)
-        col_mat = st.number_input("재료비단가(E) 열", value=5, min_value=1)
-    with col3:
-        col_lab = st.number_input("노무비단가(G) 열", value=7, min_value=1)
-        col_exp = st.number_input("경비단가(I) 열", value=9, min_value=1)
+# 2. 설정 창 (유 대리님 요청대로 A, B, C, E, G, I 순서대로 배치)
+with st.expander("⚙️ 내역서 양식 설정 (열 번호 입력)", expanded=True):
+    st.write("사용하시는 엑셀 파일의 열 번호를 입력하세요 (A=1, B=2, C=3, E=5, G=7, I=9 등)")
+    
+    start_row = st.number_input("데이터 시작 행", value=2, min_value=1)
+    
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    with c1: col_a = st.number_input("품명(A) 열", value=1, min_value=1)
+    with c2: col_b = st.number_input("규격(B) 열", value=2, min_value=1)
+    with c3: col_c = st.number_input("단위(C) 열", value=3, min_value=1)
+    with c4: col_e = st.number_input("재료비(E) 열", value=5, min_value=1)
+    with c5: col_g = st.number_input("노무비(G) 열", value=7, min_value=1)
+    with c6: col_i = st.number_input("경비(I) 열", value=9, min_value=1)
 
 # 3. 구글 시트 데이터 로드
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
@@ -52,30 +52,28 @@ uploaded_file = st.file_uploader("작업할 내역서 엑셀 파일을 업로드
 
 if uploaded_file and isinstance(master_data, dict):
     wb = openpyxl.load_workbook(uploaded_file)
-    sheet_names = wb.sheetnames
-    selected_sheet = st.selectbox("수정할 시트를 선택하세요", sheet_names)
+    selected_sheet = st.selectbox("수정할 시트를 선택하세요", wb.sheetnames)
     ws = wb[selected_sheet]
 
     if st.button("단가 자동 입력 실행"):
         count = 0
-        # 상단 설정창에서 입력한 start_row 부터 시작
         for row in range(start_row, ws.max_row + 1): 
-            # 상단 설정창에서 정한 열 번호를 기준으로 값을 읽음
-            val_name = ws.cell(row=row, column=col_name).value
-            val_spec = ws.cell(row=row, column=col_spec).value
+            # 설정창의 번호를 기준으로 값을 가져옴
+            val_a = ws.cell(row=row, column=col_a).value
+            val_b = ws.cell(row=row, column=col_b).value
             
-            name = str(val_name).strip() if val_name is not None else ""
-            spec = str(val_spec).strip() if val_spec is not None else ""
+            name = str(val_a).strip() if val_a is not None else ""
+            spec = str(val_b).strip() if val_b is not None else ""
             current_key = f"{name}_{spec}"
             
             if current_key in master_data:
-                # 상단 설정창에서 정한 열 번호에 값을 기록
+                # 설정창의 번호(E, G, I)에 값을 입력
                 if master_data[current_key]['E'] is not None:
-                    ws.cell(row=row, column=col_mat).value = master_data[current_key]['E']
+                    ws.cell(row=row, column=col_e).value = master_data[current_key]['E']
                 if master_data[current_key]['G'] is not None:
-                    ws.cell(row=row, column=col_lab).value = master_data[current_key]['G']
+                    ws.cell(row=row, column=col_g).value = master_data[current_key]['G']
                 if master_data[current_key]['I'] is not None:
-                    ws.cell(row=row, column=col_exp).value = master_data[current_key]['I']
+                    ws.cell(row=row, column=col_i).value = master_data[current_key]['I']
                 count += 1
         
         st.success(f"성공! {count}개의 항목이 업데이트되었습니다.")
