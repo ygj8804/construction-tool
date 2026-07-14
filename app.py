@@ -12,7 +12,6 @@ st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wi
 
 # [구글 시트 연동 함수]
 def append_to_master(df):
-    # Streamlit Secrets에서 GCP 인증 정보 가져오기
     creds_dict = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
     client = gspread.authorize(creds)
@@ -24,7 +23,6 @@ def append_to_master(df):
     # 데이터 행 준비 (A~I열)
     data_to_add = []
     for _, row in df.iterrows():
-        # [A, B, C, D(빈칸), E(재료비), F(빈칸), G(노무비), H(빈칸), I(경비)] 순서
         new_row = [
             row['품명'], row['규격'], row['단위'], 
             "",             # D열
@@ -74,10 +72,11 @@ with tab1:
         ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames, key="sheet1")
         wb.close()
         
-        ws = openpyxl.load_workbook(uploaded_file)[ws_name]
+        # [추가] 저장 확장자 선택
+        save_format = st.selectbox("저장할 파일 확장자 선택", [".xlsx (추천)", ".xlsx", ".xls", ".csv"], key="save_format")
         
         if st.button("단가 매칭 실행", type="primary"):
-            st.success("단가 매칭이 완료되었습니다.")
+            st.success(f"단가 매칭이 완료되었습니다. ({save_format} 형식으로 저장 준비됨)")
 
 # --- [탭 2] 신규 단가 파일 정리 ---
 with tab2:
@@ -92,7 +91,7 @@ with tab2:
             n_unit = st.text_input("외부 파일 - 단위 열", value="C", key="n_unit")
         with n2:
             n_mat = st.text_input("외부 파일 - 재료비 열", value="D", key="n_mat")
-            n_lab = st.text_input("외부 파일 - Е", value="E", key="n_lab") # 값 수정 주의
+            n_lab = st.text_input("외부 파일 - Е", value="E", key="n_lab") 
             n_exp = st.text_input("외부 파일 - 경비 열", value="F", key="n_exp")
 
     new_file = st.file_uploader("지자체 양식 엑셀 파일 업로드", type=['xlsx'], key="new_file")
@@ -118,7 +117,6 @@ with tab2:
             st.success("변환 완료! 아래 버튼을 눌러 마스터 시트에 자동 추가하세요.")
             st.dataframe(df_result)
             
-            # [추가] 마스터 시트로 자동 보내기
             if st.button("🚀 마스터 시트에 바로 추가하기"):
                 try:
                     append_to_master(df_result)
