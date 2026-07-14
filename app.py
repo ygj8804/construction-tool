@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
 
-# [함수] 글자 정규화 (공백/탭/줄바꿈 제거)
+# [함수] 글자 정규화
 def normalize_text(text):
     if pd.isna(text): return ""
     return str(text).replace(" ", "").replace("\t", "").replace("\n", "").replace("\r", "")
@@ -30,9 +30,11 @@ DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfF
 EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt/edit?rtpof=true"
 
 st.title("🏗️ 서원건설 - 단가 관리 시스템")
+
+# [탭 구성]
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
-# --- [탭 1] 단가 자동 입력 ---
+# --- [탭 1] ---
 with tab1:
     with st.expander("⚙️ [설정] 데이터 위치 및 저장 옵션", expanded=True):
         c1, c2 = st.columns(2)
@@ -55,22 +57,17 @@ with tab1:
         
         if st.button("단가 매칭 실행", type="primary"):
             try:
-                # 마스터 데이터 로드 (에러 방지: 첫 행이 헤더인 경우)
-                master_df = pd.read_csv(DATA_URL)
+                # [핵심 수정] 마스터 데이터 읽기 시 header=0 명시
+                master_df = pd.read_csv(DATA_URL, header=0)
+                # 데이터가 헤더를 제대로 못 찾으면 아래 열 이름을 강제로 덮어씌웁니다.
+                master_df.columns = ['품명', '규격', '단위', '재료비', '노무비', '경비', '비고']
                 
-                # [중요] 마스터 시트 열 이름이 다를 경우를 대비해 유연하게 매칭
-                # 실제 데이터에 있는 열 이름을 출력해보고, 필요한 이름으로 매핑
-                required_cols = ['품명', '규격', '단위', '재료비', '노무비', '경비']
-                
-                # 데이터 정규화용
                 master_df['clean_name'] = master_df['품명'].apply(normalize_text)
                 master_df['clean_spec'] = master_df['규격'].apply(normalize_text)
                 
-                # 엑셀 데이터 읽기
                 uploaded_file.seek(0)
                 df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
                 
-                # 매칭 루프
                 for i in range(start_row - 1, len(df_ex)):
                     idx_name = column_index_from_string(col_name.upper()) - 1
                     idx_spec = column_index_from_string(col_spec.upper()) - 1
@@ -101,9 +98,8 @@ with tab1:
                 wb.close()
             except Exception as e:
                 st.error(f"오류 발생: {e}")
-                st.write("💡 팁: 구글 시트의 첫 줄에 '품명', '규격', '단위', '재료비', '노무비', '경비'가 정확히 있는지 확인해 주세요.")
 
-# --- [탭 2] 신규 단가 파일 정리 ---
+# --- [탭 2] ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
     n1, n2 = st.columns(2)
@@ -119,21 +115,19 @@ with tab2:
     if new_file:
         df_raw = pd.read_excel(new_file, header=None)
         if st.button("마스터 형식 변환"):
-            # 4행부터 데이터 시작 가정 (필요시 조절)
             df_result = df_raw.iloc[3:, [
                 column_index_from_string(n_name.upper()) - 1,
                 column_index_from_string(n_spec.upper()) - 1,
-                0, # 단위는 임시로 0열로 설정 (필요시 조정)
-                column_index_from_string(n_mat.upper()) - 1,
+                0, column_index_from_string(n_mat.upper()) - 1,
                 column_index_from_string(n_lab.upper()) - 1,
                 column_index_from_string(n_exp.upper()) - 1
             ]].copy()
             df_result.columns = ["품명", "규격", "단위", "재료비", "노무비", "경비"]
             st.dataframe(df_result)
-            
             if st.button("🚀 마스터 시트에 추가"):
-                try:
-                    append_to_master(df_result)
-                    st.success("성공! 마스터 시트에 추가되었습니다.")
-                except Exception as e:
-                    st.error(f"오류: {e}")
+                append_to_master(df_result)
+                st.success("성공! 마스터 시트에 추가되었습니다.")
+
+# [푸터]
+st.markdown("---")
+st.caption("개발: 유강진")
