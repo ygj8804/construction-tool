@@ -5,11 +5,18 @@ from io import BytesIO
 from openpyxl.utils import column_index_from_string
 import gspread
 from google.oauth2.service_account import Credentials
+import re
 
 # 페이지 설정
 st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
 
-# [함수] 구글 시트 연동
+# 데이터 정규화 함수 (강력하게 정제)
+def normalize(text):
+    if pd.isna(text): return ""
+    # 모든 공백, 탭, 줄바꿈, 특수문자 제거
+    return re.sub(r'[\s\t\n\r\W]', '', str(text).lower())
+
+# 구글 시트 연동
 def append_to_master(df):
     creds_dict = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
@@ -24,7 +31,6 @@ DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfF
 
 st.title("🏗️ 서원건설 - 단가 관리 시스템")
 
-# 탭 구성 (기존 UI 복구)
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
 # --- [탭 1] 단가 자동 입력 ---
@@ -49,9 +55,13 @@ with tab1:
         
         if st.button("단가 매칭 실행"):
             try:
-                # 데이터 준비
+                # 마스터 데이터 로드
                 raw_df = pd.read_csv(DATA_URL).iloc[:, 0:7]
                 raw_df.columns = ['품명', '규격', '단위', '재료비', '노무비', '경비', '비고']
+                
+                # 비교용 정규화 컬럼 생성
+                raw_df['n_name'] = raw_df['품명'].apply(normalize)
+                raw_df['n_spec'] = raw_df['규격'].apply(normalize)
                 
                 ws = wb[ws_name]
                 df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
@@ -61,11 +71,11 @@ with tab1:
                 c_s = column_index_from_string(col_spec.upper()) - 1
                 
                 for i in range(start_row - 1, len(df_ex)):
-                    v_n = str(df_ex.iloc[i, c_n]).replace(" ", "")
-                    v_s = str(df_ex.iloc[i, c_s]).replace(" ", "")
+                    v_n = normalize(df_ex.iloc[i, c_n])
+                    v_s = normalize(df_ex.iloc[i, c_s])
                     
-                    match = raw_df[(raw_df['품명'].astype(str).str.replace(" ", "") == v_n) & 
-                                   (raw_df['규격'].astype(str).str.replace(" ", "") == v_s)]
+                    # 매칭
+                    match = raw_df[(raw_df['n_name'] == v_n) & (raw_df['n_spec'] == v_s)]
                     
                     if not match.empty:
                         row_idx = i + 1
@@ -73,25 +83,44 @@ with tab1:
                         
                         for col_char, val in targets:
                             cell = ws[f"{col_char.upper()}{row_idx}"]
-                            # [핵심] 수식이 있는 셀은 절대 건드리지 않음
-                            if cell.data_type != 'f':
+                            if cell.data_type != 'f': # 수식 있으면 건너뜀
                                 cell.value = val
                         match_count += 1
                 
                 output = BytesIO()
                 wb.save(output)
-                st.success(f"🎉 단가 매칭 완료! ({match_count}개 반영)")
+                st.success(f"🎉 단가 매칭 완료! (총 {match_count}개 항목)")
                 st.download_button("결과 파일 다운로드", output.getvalue(), file_name=f"매칭완료{file_ext}")
             except Exception as e: st.error(f"오류: {e}")
 
-# --- [탭 2] 신규 단가 데이터 정리기 (복구) ---
+# --- [탭 2] 신규 단가 데이터 정리기 ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
+    n_name = st.text_input("외부 품명 열", value="A")
+    n_spec = st.text_input("외부 규격 열", value="B")
+    n_unit = st.text_input("외부 단위 열", value="C")
     n_mat = st.text_input("외부 재료비 열", value="D")
     n_lab = st.text_input("외부 노무비 열", value="E")
     n_exp = st.text_input("외부 경비 열", value="F")
     
     new_file = st.file_uploader("지자체 양식 업로드", type=['xlsx', 'xls'])
     if new_file:
-        if st.button("마스터 시트에 추가"):
-            st.success("데이터 확인 완료 후 추가됩니다.")
+        sheet_names = openpyxl.load_workbook(new_file).sheetnames
+        n_ws = st.selectbox("작업할 시트", sheet_names)
+        if st.button("마스터 시트 추가 준비"):
+            df_new = pd.read_excel(new_file, sheet_name=n_ws, header=None)
+            # 입력된 열만 선택
+            cols = [
+                column_index_from_string(n_name.upper())-1,
+                column_index_from_string(n_spec.upper())-1,
+                column_index_from_string(n_unit.upper())-1,
+                column_index_from_string(n_mat.upper())-1,
+                column_index_from_string(n_lab.upper())-1,
+                column_index_from_string(n_exp.upper())-1
+            ]
+            df_res = df_new.iloc[3:, cols].copy()
+            df_res.columns = ['품명', '규격', '단위', '재료비', '노무비', '경비']
+            st.dataframe(df_res)
+            if st.button("🚀 최종 마스터 시트 추가"):
+                append_to_master(df_res)
+                st.success("추가 완료되었습니다.")
