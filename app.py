@@ -4,9 +4,40 @@ import openpyxl
 from io import BytesIO
 from openpyxl.utils import column_index_from_string
 from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
 
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
+
+# [구글 시트 연동 함수]
+def append_to_master(df):
+    # Streamlit Secrets에서 GCP 인증 정보 가져오기
+    creds_dict = st.secrets["gcp_service_account"]
+    creds = Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    client = gspread.authorize(creds)
+    
+    # 마스터 시트 열기 (본인의 시트 ID)
+    spreadsheet = client.open_by_key("1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt")
+    worksheet = spreadsheet.sheet1
+    
+    # 데이터 행 준비 (A~I열)
+    data_to_add = []
+    for _, row in df.iterrows():
+        # [A, B, C, D(빈칸), E(재료비), F(빈칸), G(노무비), H(빈칸), I(경비)] 순서
+        new_row = [
+            row['품명'], row['규격'], row['단위'], 
+            "",             # D열
+            row['재료비'],  # E열
+            "",             # F열 (빈칸)
+            row['노무비'],  # G열
+            "",             # H열 (빈칸)
+            row['경비']     # I열
+        ]
+        data_to_add.append(new_row)
+        
+    worksheet.append_rows(data_to_add)
+    return True
 
 # [데이터 연결 주소]
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
@@ -14,10 +45,10 @@ EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2f
 
 st.title("🏗️ 서원건설 - 단가 관리 시스템")
 
-# 탭 나누기 (기존 기능 + 신규 기능)
+# 탭 나누기
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
-# --- [탭 1] 단가 자동 입력 (기존 기능 그대로 유지) ---
+# --- [탭 1] 단가 자동 입력 ---
 with tab1:
     col_info, col_btn = st.columns([0.6, 0.4])
     with col_info:
@@ -41,15 +72,14 @@ with tab1:
     if uploaded_file:
         wb = openpyxl.load_workbook(uploaded_file, read_only=True)
         ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames, key="sheet1")
-        wb.close() # 메모리 해제
+        wb.close()
         
-        # 다시 파일을 읽어서 작업
         ws = openpyxl.load_workbook(uploaded_file)[ws_name]
         
         if st.button("단가 매칭 실행", type="primary"):
-            st.success("단가 매칭이 완료되었습니다.") # 기존 로직 생략
+            st.success("단가 매칭이 완료되었습니다.")
 
-# --- [탭 2] 신규 단가 파일 정리 (시트 선택 기능 추가!) ---
+# --- [탭 2] 신규 단가 파일 정리 ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
     st.write("지자체 양식 파일을 올리면 [품명, 규격, 단위, 재료비, 노무비, 경비] 순서로 1초 만에 정리해줍니다.")
@@ -62,22 +92,19 @@ with tab2:
             n_unit = st.text_input("외부 파일 - 단위 열", value="C", key="n_unit")
         with n2:
             n_mat = st.text_input("외부 파일 - 재료비 열", value="D", key="n_mat")
-            n_lab = st.text_input("외부 파일 - 노무비 열", value="E", key="n_lab")
+            n_lab = st.text_input("외부 파일 - Е", value="E", key="n_lab") # 값 수정 주의
             n_exp = st.text_input("외부 파일 - 경비 열", value="F", key="n_exp")
 
     new_file = st.file_uploader("지자체 양식 엑셀 파일 업로드", type=['xlsx'], key="new_file")
     
     if new_file:
-        # 1. 파일 올리자마자 시트 목록 보여주기
         wb_n = openpyxl.load_workbook(new_file, read_only=True)
         selected_sheet = st.selectbox("작업할 시트 선택", wb_n.sheetnames, key="sheet2")
         wb_n.close()
         
-        # 2. 선택된 시트로 데이터 읽기
         df_raw = pd.read_excel(new_file, sheet_name=selected_sheet, header=None)
         
         if st.button("마스터 형식으로 변환"):
-            # 알파벳을 숫자로 변환
             idx_name = column_index_from_string(n_name.upper()) - 1
             idx_spec = column_index_from_string(n_spec.upper()) - 1
             idx_unit = column_index_from_string(n_unit.upper()) - 1
@@ -85,12 +112,20 @@ with tab2:
             idx_lab = column_index_from_string(n_lab.upper()) - 1
             idx_exp = column_index_from_string(n_exp.upper()) - 1
             
-            # 필요한 열만 추출 (4행부터 데이터 시작)
             df_result = df_raw.iloc[3:, [idx_name, idx_spec, idx_unit, idx_mat, idx_lab, idx_exp]].copy()
             df_result.columns = ["품명", "규격", "단위", "재료비", "노무비", "경비"]
             
-            st.success("변환 완료! 이 데이터를 복사해서 마스터 시트에 붙여넣으세요.")
+            st.success("변환 완료! 아래 버튼을 눌러 마스터 시트에 자동 추가하세요.")
             st.dataframe(df_result)
+            
+            # [추가] 마스터 시트로 자동 보내기
+            if st.button("🚀 마스터 시트에 바로 추가하기"):
+                try:
+                    append_to_master(df_result)
+                    st.success("🎉 성공! 마스터 시트에 데이터가 입력되었습니다.")
+                    st.balloons()
+                except Exception as e:
+                    st.error(f"오류가 발생했습니다: {e}")
             
             csv = df_result.to_csv(index=False).encode('utf-8-sig')
             st.download_button("변환된 데이터 다운로드(CSV)", csv, "마스터_추가용_데이터.csv", "text/csv")
