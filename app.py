@@ -54,10 +54,21 @@ with tab1:
         
         if st.button("단가 매칭 실행", type="primary"):
             try:
-                # 마스터 데이터 로드 (7개 열만 추출)
+                # [데이터 정제 핵심 로직]
                 raw_df = pd.read_csv(DATA_URL)
-                master_df = raw_df.iloc[:, 0:7].copy() 
-                master_df.columns = ['품명', '규격', '단위', '재료비', '노무비', '경비', '비고']
+                raw_df.columns = ['품명', '규격', '단위', '재료비', '노무비', '경비', '비고']
+                
+                # 1. 헤더가 데이터에 섞여있는 경우 제거
+                master_df = raw_df[raw_df['품명'] != '품명'].copy()
+                
+                # 2. 가격 데이터 숫자형 강제 변환 (숫자 아니면 NaN)
+                master_df['재료비'] = pd.to_numeric(master_df['재료비'], errors='coerce')
+                master_df['노무비'] = pd.to_numeric(master_df['노무비'], errors='coerce')
+                master_df['경비'] = pd.to_numeric(master_df['경비'], errors='coerce')
+                
+                # 3. 데이터가 없는(NaN) 행 제거
+                master_df = master_df.dropna(subset=['재료비', '노무비', '경비'])
+                
                 master_df['clean_name'] = master_df['품명'].apply(normalize_text)
                 master_df['clean_spec'] = master_df['규격'].apply(normalize_text)
                 
@@ -74,18 +85,21 @@ with tab1:
                     val_name_clean = normalize_text(df_ex.iloc[i, idx_name])
                     val_spec_clean = normalize_text(df_ex.iloc[i, idx_spec])
                     
+                    # 정확히 품명과 규격이 일치하는 행 찾기
                     match = master_df[(master_df['clean_name'] == val_name_clean) & 
                                       (master_df['clean_spec'] == val_spec_clean)]
                     
                     if not match.empty:
                         row_idx = i + 1
-                        # [핵심] 수식 보호 로직: 셀에 수식('f')이 있다면 덮어쓰지 않음
-                        for col_char in [col_mat, col_lab, col_exp]:
+                        # 첫 번째 매칭된 데이터만 사용
+                        target_data = match.iloc[0]
+                        
+                        # 수식 보호 로직: 수식('f')이 아닌 경우에만 값 입력
+                        for col_char, col_name in [(col_mat, '재료비'), (col_lab, '노무비'), (col_exp, '경비')]:
                             cell = ws[f"{col_char}{row_idx}"]
-                            if cell.data_type != 'f': # 수식이 아닌 경우에만 값 입력
-                                if col_char == col_mat: cell.value = match['재료비'].values[0]
-                                if col_char == col_lab: cell.value = match['노무비'].values[0]
-                                if col_char == col_exp: cell.value = match['경비'].values[0]
+                            if cell.data_type != 'f': 
+                                cell.value = target_data[col_name]
+                        
                         match_count += 1
                 
                 output = BytesIO()
@@ -123,7 +137,6 @@ with tab2:
         
         if st.button("마스터 형식 변환"):
             df_raw = pd.read_excel(new_file, sheet_name=new_ws_name, header=None)
-            # 3행(데이터 시작 행)부터 처리
             df_result = df_raw.iloc[3:, [
                 column_index_from_string(n_name.upper()) - 1,
                 column_index_from_string(n_spec.upper()) - 1,
@@ -141,6 +154,5 @@ with tab2:
                 except Exception as e:
                     st.error(f"오류: {e}")
 
-# [푸터]
 st.markdown("---")
 st.caption("개발: 유강진")
