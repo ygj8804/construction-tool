@@ -14,19 +14,20 @@ st.markdown("**만든이: 유강진 대리**")
 st.markdown("---")
 
 # 3. 설정 창 (상단 배치)
-with st.expander("⚙️ 설정 (데이터 시작 행 및 열 번호)", expanded=True):
-    col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("📍 행(Row) 설정")
-        start_row = st.number_input("데이터가 시작되는 행 번호", value=2, min_value=1, help="내역서 데이터가 몇 번째 줄부터 시작하나요?")
-    
-    with col2:
-        st.subheader("📊 열(Column) 설정")
+with st.expander("⚙️ 설정 (데이터 시작 행 및 열 번호 설정)", expanded=True):
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.subheader("📍 행/열 기본 설정")
+        start_row = st.number_input("데이터 시작 행", value=2, min_value=1)
         col_name = st.number_input("품명(A) 열 번호", value=1, min_value=1)
         col_spec = st.number_input("규격(B) 열 번호", value=2, min_value=1)
-        col_e = st.number_input("단가1(E) 열 번호", value=5, min_value=1)
-        col_g = st.number_input("단가2(G) 열 번호", value=7, min_value=1)
-        col_i = st.number_input("단가3(I) 열 번호", value=9, min_value=1)
+        col_unit = st.number_input("단위(C) 열 번호", value=3, min_value=1)
+    
+    with col_b:
+        st.subheader("💰 단가 열 설정")
+        col_e = st.number_input("재료비(E) 열 번호", value=5, min_value=1)
+        col_g = st.number_input("노무비(G) 열 번호", value=7, min_value=1)
+        col_i = st.number_input("경비(I) 열 번호", value=9, min_value=1)
 
 # 4. 구글 시트(마스터 데이터) 로드
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
@@ -34,14 +35,18 @@ GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGy
 @st.cache_data(ttl=60) 
 def load_master_data():
     try:
+        # header=None으로 읽어와서 첫 줄부터 데이터로 처리
         df = pd.read_csv(GOOGLE_SHEET_URL, header=None)
         if df.empty: return "데이터 없음"
         
         master_data = {}
         for _, row in df.iterrows():
+            # A열(0) + "_" + B열(1)을 키로 사용
             name = str(row[0]).strip() if pd.notnull(row[0]) else ""
             spec = str(row[1]).strip() if pd.notnull(row[1]) else ""
             key = f"{name}_{spec}"
+            
+            # E(4), G(6), I(8) 인덱스 매칭
             master_data[key] = {
                 'E': row[4] if len(row) > 4 else None,
                 'G': row[6] if len(row) > 6 else None,
@@ -67,7 +72,6 @@ if uploaded_file and master_data:
 
             if st.button("단가 자동 입력 실행"):
                 count = 0
-                # 설정된 시작 행부터 끝까지 반복
                 for row in range(start_row, ws.max_row + 1): 
                     val_name = ws.cell(row=row, column=col_name).value
                     val_spec = ws.cell(row=row, column=col_spec).value
@@ -77,7 +81,7 @@ if uploaded_file and master_data:
                     current_key = f"{name}_{spec}"
                     
                     if current_key in master_data:
-                        # 설정된 열 번호에 값 대입
+                        # 설정된 열(E, G, I)에 값 대입
                         if master_data[current_key]['E'] is not None:
                             ws.cell(row=row, column=col_e).value = master_data[current_key]['E']
                         if master_data[current_key]['G'] is not None:
