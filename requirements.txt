@@ -2,5 +2,6 @@ streamlit
 openpyxl
 pandas
 gspread
+google-auth
 oauth2client
 xlrd
