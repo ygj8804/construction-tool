@@ -9,12 +9,7 @@ from google.oauth2.service_account import Credentials
 # 페이지 설정
 st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
 
-# 글자 정규화
-def normalize_text(text):
-    if pd.isna(text): return ""
-    return str(text).replace(" ", "").replace("\t", "").replace("\n", "").replace("\r", "")
-
-# 구글 시트 연동
+# [함수] 구글 시트 연동
 def append_to_master(df):
     creds_dict = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
@@ -29,9 +24,10 @@ DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfF
 
 st.title("🏗️ 서원건설 - 단가 관리 시스템")
 
+# 탭 구성 (기존 UI 복구)
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
-# --- [탭 1] ---
+# --- [탭 1] 단가 자동 입력 ---
 with tab1:
     with st.expander("⚙️ [설정] 데이터 위치 옵션", expanded=True):
         col1, col2 = st.columns(2)
@@ -56,8 +52,6 @@ with tab1:
                 # 데이터 준비
                 raw_df = pd.read_csv(DATA_URL).iloc[:, 0:7]
                 raw_df.columns = ['품명', '규격', '단위', '재료비', '노무비', '경비', '비고']
-                raw_df['clean_name'] = raw_df['품명'].apply(normalize_text)
-                raw_df['clean_spec'] = raw_df['규격'].apply(normalize_text)
                 
                 ws = wb[ws_name]
                 df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
@@ -67,31 +61,30 @@ with tab1:
                 c_s = column_index_from_string(col_spec.upper()) - 1
                 
                 for i in range(start_row - 1, len(df_ex)):
-                    v_n = normalize_text(df_ex.iloc[i, c_n])
-                    v_s = normalize_text(df_ex.iloc[i, c_s])
+                    v_n = str(df_ex.iloc[i, c_n]).replace(" ", "")
+                    v_s = str(df_ex.iloc[i, c_s]).replace(" ", "")
                     
-                    match = raw_df[(raw_df['clean_name'] == v_n) & (raw_df['clean_spec'] == v_s)]
+                    match = raw_df[(raw_df['품명'].astype(str).str.replace(" ", "") == v_n) & 
+                                   (raw_df['규격'].astype(str).str.replace(" ", "") == v_s)]
                     
                     if not match.empty:
                         row_idx = i + 1
-                        val_m = match['재료비'].values[0]
-                        val_l = match['노무비'].values[0]
-                        val_e = match['경비'].values[0]
+                        targets = [(col_mat, match['재료비'].values[0]), (col_lab, match['노무비'].values[0]), (col_exp, match['경비'].values[0])]
                         
-                        # [절대 보호] 정확히 입력받은 열만 수정
-                        for char, val in [(col_mat, val_m), (col_lab, val_l), (col_exp, val_e)]:
-                            target_cell = ws[f"{char.upper()}{row_idx}"]
-                            if target_cell.data_type != 'f': # 수식이면 절대 건드리지 않음
-                                target_cell.value = val
+                        for col_char, val in targets:
+                            cell = ws[f"{col_char.upper()}{row_idx}"]
+                            # [핵심] 수식이 있는 셀은 절대 건드리지 않음
+                            if cell.data_type != 'f':
+                                cell.value = val
                         match_count += 1
                 
                 output = BytesIO()
                 wb.save(output)
-                st.success(f"🎉 단가 매칭 완료! (총 {match_count}개 항목)")
+                st.success(f"🎉 단가 매칭 완료! ({match_count}개 반영)")
                 st.download_button("결과 파일 다운로드", output.getvalue(), file_name=f"매칭완료{file_ext}")
             except Exception as e: st.error(f"오류: {e}")
 
-# --- [탭 2] ---
+# --- [탭 2] 신규 단가 데이터 정리기 (복구) ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
     n_mat = st.text_input("외부 재료비 열", value="D")
