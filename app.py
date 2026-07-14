@@ -6,92 +6,113 @@ from openpyxl.utils import column_index_from_string
 from datetime import datetime
 
 # 1. 페이지 설정
-st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
+st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
 # [데이터 연결 주소]
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
 EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt/edit?rtpof=true"
 
-st.title("🏗️ 서원건설 - 단가 관리 시스템")
+# 제목 및 상단 정보
+st.title("🏗️ 서원건설 - 단가 자동 입력기")
 
-# 탭 나누기 (기존 기능 + 신규 기능)
-tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
+# 상단에 데이터 동기화 시간 및 수정 버튼 배치
+col_info, col_btn = st.columns([0.6, 0.4])
+with col_info:
+    st.info(f"📋 마스터 데이터 기준 시간 (데이터동기화완료): {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+with col_btn:
+    st.link_button("단가 수정하기 ↗️", EDIT_URL)
 
-# --- [탭 1] 단가 자동 입력 (기존 기능 그대로 유지) ---
-with tab1:
-    col_info, col_btn = st.columns([0.6, 0.4])
-    with col_info:
-        st.info(f"📋 마스터 데이터 기준: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    with col_btn:
-        st.link_button("단가 수정하기 (마스터 시트) ↗️", EDIT_URL)
+st.markdown("---")
 
-    with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 입력", expanded=False):
-        start_row = st.number_input("데이터 시작 행", value=4, min_value=1, key="start_row")
-        c1, c2 = st.columns(2)
-        with c1:
-            col_name = st.text_input("품명 열", value="A", key="col_name")
-            col_spec = st.text_input("규격 열", value="B", key="col_spec")
-        with c2:
-            col_mat = st.text_input("재료비 열", value="E", key="col_mat")
-            col_lab = st.text_input("노무비 열", value="G", key="col_lab")
-            col_exp = st.text_input("경비 열", value="I", key="col_exp")
-
-    uploaded_file = st.file_uploader("작업할 견적서 엑셀 업로드", type=['xlsx', 'xls'], key="main_file")
+# 2. 정갈한 설정창
+with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 (열) 입력", expanded=True):
+    st.subheader("1. 데이터 시작 행")
+    start_row = st.number_input("데이터가 실제로 시작되는 행 번호", value=4, min_value=1)
     
-    if uploaded_file:
-        wb = openpyxl.load_workbook(uploaded_file, read_only=True)
-        ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames, key="sheet1")
-        wb.close() # 메모리 해제
-        
-        # 다시 파일을 읽어서 작업
-        ws = openpyxl.load_workbook(uploaded_file)[ws_name]
-        
-        if st.button("단가 매칭 실행", type="primary"):
-            st.success("단가 매칭이 완료되었습니다.") # 기존 로직 생략
-
-# --- [탭 2] 신규 단가 파일 정리 (시트 선택 기능 추가!) ---
-with tab2:
-    st.subheader("➕ 신규 단가 데이터 정리기")
-    st.write("지자체 양식 파일을 올리면 [품명, 규격, 단위, 재료비, 노무비, 경비] 순서로 1초 만에 정리해줍니다.")
+    st.markdown("---")
     
-    with st.expander("⚙️ [설정] 외부 파일의 열 위치 확인", expanded=True):
-        n1, n2 = st.columns(2)
-        with n1:
-            n_name = st.text_input("외부 파일 - 품명 열", value="A", key="n_name")
-            n_spec = st.text_input("외부 파일 - 규격 열", value="B", key="n_spec")
-            n_unit = st.text_input("외부 파일 - 단위 열", value="C", key="n_unit")
-        with n2:
-            n_mat = st.text_input("외부 파일 - 재료비 열", value="D", key="n_mat")
-            n_lab = st.text_input("외부 파일 - 노무비 열", value="E", key="n_lab")
-            n_exp = st.text_input("외부 파일 - 경비 열", value="F", key="n_exp")
-
-    new_file = st.file_uploader("지자체 양식 엑셀 파일 업로드", type=['xlsx'], key="new_file")
+    st.subheader("2. 각 항목별 위치 (열) 입력 (알파벳 입력)")
+    col1, col2 = st.columns(2)
     
-    if new_file:
-        # 1. 파일 올리자마자 시트 목록 보여주기
-        wb_n = openpyxl.load_workbook(new_file, read_only=True)
-        selected_sheet = st.selectbox("작업할 시트 선택", wb_n.sheetnames, key="sheet2")
-        wb_n.close()
+    with col1:
+        st.write("**기본 항목**")
+        col_name_str = st.text_input("품명 (열)", value="A")
+        col_spec_str = st.text_input("규격 (열)", value="B")
+        col_unit_str = st.text_input("단위 (열)", value="C")
         
-        # 2. 선택된 시트로 데이터 읽기
-        df_raw = pd.read_excel(new_file, sheet_name=selected_sheet, header=None)
-        
-        if st.button("마스터 형식으로 변환"):
-            # 알파벳을 숫자로 변환
-            idx_name = column_index_from_string(n_name.upper()) - 1
-            idx_spec = column_index_from_string(n_spec.upper()) - 1
-            idx_unit = column_index_from_string(n_unit.upper()) - 1
-            idx_mat = column_index_from_string(n_mat.upper()) - 1
-            idx_lab = column_index_from_string(n_lab.upper()) - 1
-            idx_exp = column_index_from_string(n_exp.upper()) - 1
+    with col2:
+        st.write("**단가 데이터 입력 위치**")
+        col_mat_str = st.text_input("재료비단가 (열)", value="E")
+        col_lab_str = st.text_input("노무비단가 (열)", value="G")
+        col_exp_str = st.text_input("경비단가 (열)", value="I")
+
+# 3. 마스터 데이터 로드
+@st.cache_data(ttl=60)
+def load_master_data():
+    try:
+        df = pd.read_csv(DATA_URL, header=None)
+        master_data = {}
+        for _, row in df.iterrows():
+            # 빈 셀 방지 및 데이터 매핑
+            key = f"{str(row[0]).strip()}_{str(row[1]).strip()}"
+            master_data[key] = {'E': row[4], 'G': row[6], 'I': row[8]}
+        return master_data
+    except Exception as e: 
+        st.error(f"데이터 로드 실패: {e}")
+        return None
+
+master_data = load_master_data()
+
+# 4. 파일 업로드 및 기능 실행
+st.markdown("---")
+uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls', 'csv'])
+file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx", "csv"])
+
+# [추가된 시트 선택 로직]
+ws = None
+if uploaded_file and master_data:
+    try:
+        if uploaded_file.name.endswith('.csv'):
+            st.warning("CSV 파일은 셀 서식이 유지되지 않을 수 있습니다.")
+        else:
+            wb = openpyxl.load_workbook(uploaded_file)
+            # 시트 선택 기능 추가
+            selected_sheet = st.selectbox("작업할 시트를 선택하세요", wb.sheetnames)
+            ws = wb[selected_sheet]
+
+        if ws and st.button("단가 매칭 실행", type="primary"):
+            c_name = column_index_from_string(col_name_str.upper())
+            c_spec = column_index_from_string(col_spec_str.upper())
+            c_mat = column_index_from_string(col_mat_str.upper())
+            c_lab = column_index_from_string(col_lab_str.upper())
+            c_exp = column_index_from_string(col_exp_str.upper())
+
+            if uploaded_file.name.endswith('.csv'):
+                st.error("CSV 직접 수정은 서식 파괴 위험이 있어 .xlsx 파일 사용을 권장합니다.")
+            else:
+                count = 0
+                for row in range(start_row, ws.max_row + 1):
+                    val_a = str(ws.cell(row=row, column=c_name).value or "").strip()
+                    val_b = str(ws.cell(row=row, column=c_spec).value or "").strip()
+                    key = f"{val_a}_{val_b}"
+                    
+                    if key in master_data:
+                        ws.cell(row=row, column=c_mat).value = master_data[key]['E']
+                        ws.cell(row=row, column=c_lab).value = master_data[key]['G']
+                        ws.cell(row=row, column=c_exp).value = master_data[key]['I']
+                        count += 1
+                
+                st.success(f"완료! 총 {count}개의 항목에 단가가 입력되었습니다.")
+                
+                output = BytesIO()
+                wb.save(output)
+                output.seek(0)
+                
+                final_name = f"매칭완료_{uploaded_file.name.split('.')[0]}.{file_ext}"
+                st.download_button(label=f"수정된 파일 다운로드 ({file_ext})", data=output, file_name=final_name)
             
-            # 필요한 열만 추출 (4행부터 데이터 시작)
-            df_result = df_raw.iloc[3:, [idx_name, idx_spec, idx_unit, idx_mat, idx_lab, idx_exp]].copy()
-            df_result.columns = ["품명", "규격", "단위", "재료비", "노무비", "경비"]
-            
-            st.success("변환 완료! 이 데이터를 복사해서 마스터 시트에 붙여넣으세요.")
-            st.dataframe(df_result)
-            
-            csv = df_result.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("변환된 데이터 다운로드(CSV)", csv, "마스터_추가용_데이터.csv", "text/csv")
-            st.link_button("마스터 시트 열기 ↗️", EDIT_URL)
+    except Exception as e:
+        st.error(f"오류: 설정한 열 위치(알파벳)가 올바른지 확인해주세요. 상세: {e}")
+
+elif uploaded_file and not master_data:
+    st.error("마스터 데이터를 불러오지 못했습니다.")
