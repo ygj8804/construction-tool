@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
 
-# [함수] 글자 정규화
+# [함수] 글자 정규화 (공백/탭/줄바꿈 제거)
 def normalize_text(text):
     if pd.isna(text): return ""
     return str(text).replace(" ", "").replace("\t", "").replace("\n", "").replace("\r", "")
@@ -31,35 +31,34 @@ EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2f
 
 st.title("🏗️ 서원건설 - 단가 관리 시스템")
 
-# [탭 구성]
+# 탭 구성
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
-# --- [탭 1] ---
+# --- [탭 1] 단가 자동 입력 ---
 with tab1:
     with st.expander("⚙️ [설정] 데이터 위치 및 저장 옵션", expanded=True):
         c1, c2 = st.columns(2)
         with c1:
-            start_row = st.number_input("데이터 시작 행", value=4, min_value=1)
-            file_ext = st.selectbox("저장할 파일 확장자", [".xlsx", ".xls"], index=0)
+            start_row = st.number_input("데이터 시작 행", value=4, min_value=1, key="start1")
+            file_ext = st.selectbox("저장할 파일 확장자", [".xlsx", ".xls"], index=0, key="ext1")
         with c2:
-            col_name = st.text_input("품명 열", value="A")
-            col_spec = st.text_input("규격 열", value="B")
-            col_mat = st.text_input("재료비 열", value="E")
-            col_lab = st.text_input("노무비 열", value="G")
-            col_exp = st.text_input("경비 열", value="I")
+            col_name = st.text_input("품명 열", value="A", key="name1")
+            col_spec = st.text_input("규격 열", value="B", key="spec1")
+            col_mat = st.text_input("재료비 열", value="E", key="mat1")
+            col_lab = st.text_input("노무비 열", value="G", key="lab1")
+            col_exp = st.text_input("경비 열", value="I", key="exp1")
 
-    uploaded_file = st.file_uploader("작업할 견적서 엑셀 업로드", type=['xlsx', 'xls'])
+    uploaded_file = st.file_uploader("작업할 견적서 엑셀 업로드", type=['xlsx', 'xls'], key="file1")
     
     if uploaded_file:
         wb = openpyxl.load_workbook(uploaded_file)
-        ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames)
-        ws = wb[ws_name]
+        ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames, key="sheet1")
         
         if st.button("단가 매칭 실행", type="primary"):
             try:
-                # [핵심 수정] 마스터 데이터 읽기 시 header=0 명시
-                master_df = pd.read_csv(DATA_URL, header=0)
-                # 데이터가 헤더를 제대로 못 찾으면 아래 열 이름을 강제로 덮어씌웁니다.
+                # [오류 해결] 전체 데이터를 로드 후 필요한 컬럼만 추출하여 Length mismatch 해결
+                raw_df = pd.read_csv(DATA_URL)
+                master_df = raw_df.iloc[:, 0:7].copy() 
                 master_df.columns = ['품명', '규격', '단위', '재료비', '노무비', '경비', '비고']
                 
                 master_df['clean_name'] = master_df['품명'].apply(normalize_text)
@@ -67,6 +66,7 @@ with tab1:
                 
                 uploaded_file.seek(0)
                 df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
+                ws = wb[ws_name]
                 
                 for i in range(start_row - 1, len(df_ex)):
                     idx_name = column_index_from_string(col_name.upper()) - 1
@@ -99,22 +99,26 @@ with tab1:
             except Exception as e:
                 st.error(f"오류 발생: {e}")
 
-# --- [탭 2] ---
+# --- [탭 2] 신규 단가 정리 ---
 with tab2:
     st.subheader("➕ 신규 단가 데이터 정리기")
     n1, n2 = st.columns(2)
     with n1:
-        n_name = st.text_input("외부 품명 열", value="A")
-        n_spec = st.text_input("외부 규격 열", value="B")
+        n_name = st.text_input("외부 품명 열", value="A", key="name2")
+        n_spec = st.text_input("외부 규격 열", value="B", key="spec2")
     with n2:
-        n_mat = st.text_input("외부 재료비 열", value="D")
-        n_lab = st.text_input("외부 노무비 열", value="E")
-        n_exp = st.text_input("외부 경비 열", value="F")
+        n_mat = st.text_input("외부 재료비 열", value="D", key="mat2")
+        n_lab = st.text_input("외부 노무비 열", value="E", key="lab2")
+        n_exp = st.text_input("외부 경비 열", value="F", key="exp2")
 
-    new_file = st.file_uploader("지자체 양식 엑셀 업로드", type=['xlsx', 'xls'], key="new_file")
+    new_file = st.file_uploader("지자체 양식 엑셀 업로드", type=['xlsx', 'xls'], key="file2")
+    
     if new_file:
-        df_raw = pd.read_excel(new_file, header=None)
+        wb_new = openpyxl.load_workbook(new_file)
+        new_ws_name = st.selectbox("작업할 시트 선택", wb_new.sheetnames, key="sheet2")
+        
         if st.button("마스터 형식 변환"):
+            df_raw = pd.read_excel(new_file, sheet_name=new_ws_name, header=None)
             df_result = df_raw.iloc[3:, [
                 column_index_from_string(n_name.upper()) - 1,
                 column_index_from_string(n_spec.upper()) - 1,
@@ -124,9 +128,13 @@ with tab2:
             ]].copy()
             df_result.columns = ["품명", "규격", "단위", "재료비", "노무비", "경비"]
             st.dataframe(df_result)
+            
             if st.button("🚀 마스터 시트에 추가"):
-                append_to_master(df_result)
-                st.success("성공! 마스터 시트에 추가되었습니다.")
+                try:
+                    append_to_master(df_result)
+                    st.success("성공! 마스터 시트에 추가되었습니다.")
+                except Exception as e:
+                    st.error(f"오류: {e}")
 
 # [푸터]
 st.markdown("---")
