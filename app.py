@@ -75,6 +75,7 @@ if uploaded_file and master_data:
         if uploaded_file.name.endswith('.csv'):
             st.warning("CSV 파일은 셀 서식이 유지되지 않을 수 있습니다.")
         else:
+            # 서식 유지를 위해 read_only=True 제거
             wb = openpyxl.load_workbook(uploaded_file)
             # 시트 선택 기능 추가
             selected_sheet = st.selectbox("작업할 시트를 선택하세요", wb.sheetnames)
@@ -97,6 +98,7 @@ if uploaded_file and master_data:
                     key = f"{val_a}_{val_b}"
                     
                     if key in master_data:
+                        # 서식 유지(값만 변경)
                         ws.cell(row=row, column=c_mat).value = master_data[key]['E']
                         ws.cell(row=row, column=c_lab).value = master_data[key]['G']
                         ws.cell(row=row, column=c_exp).value = master_data[key]['I']
