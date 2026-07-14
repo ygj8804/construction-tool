@@ -10,7 +10,7 @@ from google.oauth2.service_account import Credentials
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 관리 시스템", layout="wide")
 
-# [구글 시트 연동 함수]
+# 2. 구글 시트 연동 함수
 def append_to_master(df):
     creds_dict = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
@@ -25,13 +25,13 @@ def append_to_master(df):
     worksheet.append_rows(data_to_add)
     return True
 
-# [URL 설정]
+# 3. URL 설정
 EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt/edit?rtpof=true"
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
 
 st.title("🏗️ 서원건설 - 단가 관리 시스템")
 
-# [중요] 탭 정의를 먼저 해야 with tab1:을 쓸 수 있습니다!
+# 4. 탭 정의
 tab1, tab2 = st.tabs(["🏗️ 1. 단가 자동 입력", "➕ 2. 신규 단가 파일 정리"])
 
 # --- [탭 1] 단가 자동 입력 ---
@@ -61,27 +61,44 @@ with tab1:
         ws = wb[ws_name]
         
         if st.button("단가 매칭 실행", type="primary"):
-            master_df = pd.read_csv(DATA_URL)
-            data = ws.values
-            df_ex = pd.DataFrame(data[start_row-1:], columns=data[start_row-1])
-            
-            for i, row in df_ex.iterrows():
-                row_idx = start_row + i
-                name, spec = str(row[col_name]), str(row[col_spec])
-                match = master_df[(master_df['품명'].astype(str) == name) & (master_df['규격'].astype(str) == spec)]
+            try:
+                # 마스터 데이터 로드
+                master_df = pd.read_csv(DATA_URL)
                 
-                if not match.empty:
-                    ws[f"{col_mat}{row_idx}"] = match['재료비'].values[0]
-                    ws[f"{col_lab}{row_idx}"] = match['노무비'].values[0]
-                    ws[f"{col_exp}{row_idx}"] = match['경비'].values[0]
-            
-            output = BytesIO()
-            wb.save(output)
-            output.seek(0)
-            
-            st.success("🎉 단가 매칭이 완료되었습니다! 아래 버튼을 눌러 결과 파일을 받으세요.")
-            st.download_button("결과 파일 다운로드 (서식 유지)", output, f"매칭완료_{uploaded_file.name}", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-            wb.close()
+                # 엑셀 파일 데이터를 안전하게 읽기 위해 Pandas 활용
+                uploaded_file.seek(0)
+                df_ex = pd.read_excel(uploaded_file, sheet_name=ws_name, header=None)
+                
+                # 매칭 루프
+                for i in range(start_row - 1, len(df_ex)):
+                    row_idx = i + 1
+                    
+                    # 열 문자 -> 숫자 인덱스 변환
+                    idx_name = column_index_from_string(col_name.upper()) - 1
+                    idx_spec = column_index_from_string(col_spec.upper()) - 1
+                    
+                    val_name = str(df_ex.iloc[i, idx_name])
+                    val_spec = str(df_ex.iloc[i, idx_spec])
+                    
+                    # 마스터 데이터에서 찾기
+                    match = master_df[(master_df['품명'].astype(str) == val_name) & (master_df['규격'].astype(str) == val_spec)]
+                    
+                    if not match.empty:
+                        # 서식 유지하며 값만 입력
+                        ws[f"{col_mat}{row_idx}"] = match['재료비'].values[0]
+                        ws[f"{col_lab}{row_idx}"] = match['노무비'].values[0]
+                        ws[f"{col_exp}{row_idx}"] = match['경비'].values[0]
+                
+                # 결과 저장
+                output = BytesIO()
+                wb.save(output)
+                output.seek(0)
+                
+                st.success("🎉 단가 매칭이 완료되었습니다!")
+                st.download_button("결과 파일 다운로드 (서식 유지)", output, f"매칭완료_{uploaded_file.name}", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                wb.close()
+            except Exception as e:
+                st.error(f"오류 발생: {e}")
 
 # --- [탭 2] 신규 단가 파일 정리 ---
 with tab2:
