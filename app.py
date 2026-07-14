@@ -8,20 +8,20 @@ from datetime import datetime
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
-# [중요] 수정이 필요한 주소들
-# DATA_URL: 프로그램이 데이터를 읽어오는 전용 주소 (기존 주소 그대로 사용)
+# [데이터 연결 주소]
+# DATA_URL: 데이터 불러오기 전용 (기존 CSV 게시 주소 그대로 사용)
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
-# EDIT_URL: 유 대리님이 수정할 때 쓰는 웹 주소 (브라우저 주소창 주소를 여기에 복사하세요)
-EDIT_URL = "https://docs.google.com/spreadsheets/d/본인의_스프레드시트_ID_주소를_여기에_넣으세요"
+# EDIT_URL: 마스터 시트 편집용 주소 (알려주신 주소 적용 완료)
+EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt/edit?rtpof=true"
 
 # 제목 및 상단 정보
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
 
+# 상단에 데이터 동기화 시간 및 수정 버튼 배치
 col_info, col_btn = st.columns([0.6, 0.4])
 with col_info:
-    st.info(f"📋 마스터 데이터 기준: {datetime.now().strftime('%Y-%m-%d')}")
+    st.info(f"📋 마스터 데이터 기준 시간 (데이터동기화완료): {datetime.now().strftime('%Y-%m-%d %H:%M')}")
 with col_btn:
-    # 수정: 다운로드 링크가 아니라 수정용 링크로 변경
     st.link_button("단가 수정하기 ↗️", EDIT_URL)
 
 st.markdown("---")
@@ -55,10 +55,13 @@ def load_master_data():
         df = pd.read_csv(DATA_URL, header=None)
         master_data = {}
         for _, row in df.iterrows():
+            # 빈 셀 방지 및 데이터 매핑
             key = f"{str(row[0]).strip()}_{str(row[1]).strip()}"
             master_data[key] = {'E': row[4], 'G': row[6], 'I': row[8]}
         return master_data
-    except: return None
+    except Exception as e: 
+        st.error(f"데이터 로드 실패: {e}")
+        return None
 
 master_data = load_master_data()
 
