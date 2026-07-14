@@ -1,0 +1,7 @@
+Plaintext
+streamlit
+openpyxl
+pandas
+gspread
+oauth2client
+xlrd
