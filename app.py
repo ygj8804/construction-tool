@@ -16,7 +16,7 @@ def append_to_master(df):
     creds = Credentials.from_service_account_info(creds_dict, scopes=['https://www.googleapis.com/auth/spreadsheets'])
     client = gspread.authorize(creds)
     
-    # 마스터 시트 열기 (본인의 시트 ID)
+    # 마스터 시트 열기
     spreadsheet = client.open_by_key("1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt")
     worksheet = spreadsheet.sheet1
     
@@ -72,11 +72,38 @@ with tab1:
         ws_name = st.selectbox("작업할 시트 선택", wb.sheetnames, key="sheet1")
         wb.close()
         
-        # [추가] 저장 확장자 선택
         save_format = st.selectbox("저장할 파일 확장자 선택", [".xlsx (추천)", ".xlsx", ".xls", ".csv"], key="save_format")
         
         if st.button("단가 매칭 실행", type="primary"):
-            st.success(f"단가 매칭이 완료되었습니다. ({save_format} 형식으로 저장 준비됨)")
+            # 매칭 로직 시작
+            try:
+                # 1. 마스터 데이터 로드
+                master_df = pd.read_csv(DATA_URL)
+                # 마스터 시트 컬럼 정리 (가정: 0:품명, 1:규격, 4:재료비, 6:노무비, 8:경비)
+                # 실제 데이터 구조에 맞게 컬럼명/인덱스 조정 필요
+                master_df.columns = ['품명', '규격', '단위', 'X1', '재료비', 'X2', '노무비', 'X3', '경비']
+                
+                # 2. 업로드 파일 데이터 로드
+                df_user = pd.read_excel(uploaded_file, sheet_name=ws_name, header=start_row-1)
+                
+                # 3. 매칭 카운트 계산
+                match_count = 0
+                for _, row in df_user.iterrows():
+                    # 사용자 파일에서 품명/규격 추출
+                    u_name = str(row[col_name.upper()]).strip()
+                    u_spec = str(row[col_spec.upper()]).strip()
+                    
+                    # 마스터 데이터와 비교
+                    match = master_df[(master_df['품명'].astype(str).str.strip() == u_name) & 
+                                      (master_df['규격'].astype(str).str.strip() == u_spec)]
+                    
+                    if not match.empty:
+                        match_count += 1
+                
+                st.success(f"🎉 단가 매칭 완료! 총 {match_count}개의 항목이 매칭되었습니다. ({save_format} 형식으로 저장 준비됨)")
+            
+            except Exception as e:
+                st.error(f"오류가 발생했습니다: {e}")
 
 # --- [탭 2] 신규 단가 파일 정리 ---
 with tab2:
@@ -91,7 +118,7 @@ with tab2:
             n_unit = st.text_input("외부 파일 - 단위 열", value="C", key="n_unit")
         with n2:
             n_mat = st.text_input("외부 파일 - 재료비 열", value="D", key="n_mat")
-            n_lab = st.text_input("외부 파일 - Е", value="E", key="n_lab") 
+            n_lab = st.text_input("외부 파일 - E", value="E", key="n_lab") 
             n_exp = st.text_input("외부 파일 - 경비 열", value="F", key="n_exp")
 
     new_file = st.file_uploader("지자체 양식 엑셀 파일 업로드", type=['xlsx'], key="new_file")
