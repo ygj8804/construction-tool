@@ -8,20 +8,27 @@ from datetime import datetime
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
-# 상단 마스터 데이터 버전 (최근 동기화 시간)
+# 마스터 데이터 경로
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
+
+# 제목 및 상단 정보 (수정하기 버튼 추가)
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
-st.info(f"📋 마스터 데이터 기준: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} (데이터 동기화 완료)")
+
+col_info, col_btn = st.columns([0.6, 0.4])
+with col_info:
+    st.info(f"📋 마스터파일 {datetime.now().strftime('%Y-%m-%d')}")
+with col_btn:
+    st.link_button("마스터파일 수정하기 ↗️", GOOGLE_SHEET_URL)
+
 st.markdown("---")
 
 # 2. 정갈한 설정창
 with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 (열) 입력", expanded=True):
-    # 1단 구성: 행 설정
     st.subheader("1. 데이터 시작 행")
     start_row = st.number_input("데이터가 실제로 시작되는 행 번호", value=4, min_value=1)
     
     st.markdown("---")
     
-    # 2단 구성: 열(Column) 설정
     st.subheader("2. 각 항목별 위치 (열) 입력 (알파벳 입력)")
     col1, col2 = st.columns(2)
     
@@ -38,8 +45,6 @@ with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 
         col_exp_str = st.text_input("경비단가 (열)", value="I")
 
 # 3. 마스터 데이터 로드
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
-
 @st.cache_data(ttl=60)
 def load_master_data():
     try:
@@ -57,7 +62,7 @@ master_data = load_master_data()
 st.markdown("---")
 uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls', 'csv'])
 
-# 파일 형식 선택 (xlsx가 가장 안정적입니다)
+# 저장할 확장자 선택
 file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx", "csv"])
 
 if uploaded_file and master_data:
@@ -78,7 +83,6 @@ if uploaded_file and master_data:
             c_exp = column_index_from_string(col_exp_str.upper())
 
             if uploaded_file.name.endswith('.csv'):
-                # CSV 처리 로직 (간소화)
                 st.error("CSV 직접 수정은 서식 파괴 위험이 있어 .xlsx 파일 사용을 권장합니다.")
             else:
                 count = 0
@@ -99,7 +103,6 @@ if uploaded_file and master_data:
                 wb.save(output)
                 output.seek(0)
                 
-                # 선택한 확장자로 저장
                 final_name = f"매칭완료_{uploaded_file.name.split('.')[0]}.{file_ext}"
                 st.download_button(label=f"수정된 파일 다운로드 ({file_ext})", data=output, file_name=final_name)
             
