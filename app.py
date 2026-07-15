@@ -16,28 +16,34 @@ EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2f
 # 제목 및 상단 정보
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
 
-# 3. 마스터 데이터 로드 (로직 변경: 중복 처리 옵션 반영)
+# 3. 마스터 데이터 로드 (오류 방지 로직 보완)
 @st.cache_data(ttl=60)
 def load_master_data(duplicate_option):
     try:
         df = pd.read_csv(DATA_URL, header=None)
-        temp_data = {} # {key: {'E': [], 'G': [], 'I': []}}
+        temp_data = {} 
         
         for _, row in df.iterrows():
             key = f"{str(row[0]).strip()}_{str(row[1]).strip()}"
             if key not in temp_data:
                 temp_data[key] = {'E': [], 'G': [], 'I': []}
             
-            # 숫자 데이터로 변환 (문자열 제거)
+            # 숫자 데이터만 추출 (오류 방지)
             try:
-                temp_data[key]['E'].append(float(str(row[4]).replace(',', '')))
-                temp_data[key]['G'].append(float(str(row[6]).replace(',', '')))
-                temp_data[key]['I'].append(float(str(row[8]).replace(',', '')))
+                e_val = float(str(row[4]).replace(',', ''))
+                g_val = float(str(row[6]).replace(',', ''))
+                i_val = float(str(row[8]).replace(',', ''))
+                
+                temp_data[key]['E'].append(e_val)
+                temp_data[key]['G'].append(g_val)
+                temp_data[key]['I'].append(i_val)
             except:
-                continue
+                continue # 숫자가 없는 행은 건너뜀
         
         master_data = {}
         for key, values in temp_data.items():
+            if not values['E']: continue # 데이터가 비어있으면 제외
+            
             if duplicate_option == "최저가 적용":
                 master_data[key] = {'E': min(values['E']), 'G': min(values['G']), 'I': min(values['I'])}
             else:
@@ -57,13 +63,12 @@ with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 
     
     st.markdown("---")
     
-    # 중복 데이터 처리 옵션 추가
-    st.subheader("3. 중복 데이터 처리 방식")
+    st.subheader("2. 중복 데이터 처리 방식")
     duplicate_option = st.selectbox("동일 품목/규격이 여러 개 있을 경우", ["최저가 적용", "최고가 적용"])
 
     st.markdown("---")
     
-    st.subheader("2. 각 항목별 위치 (열) 입력 (알파벳 입력)")
+    st.subheader("3. 각 항목별 위치 (열) 입력 (알파벳 입력)")
     col1, col2 = st.columns(2)
     
     with col1:
