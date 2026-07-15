@@ -69,71 +69,65 @@ st.markdown("---")
 uploaded_file = st.file_uploader("작업할 견적서 엑셀 파일을 업로드하세요", type=['xlsx', 'xls', 'csv'])
 file_ext = st.selectbox("저장할 파일 형식 선택", ["xlsx", "csv"])
 
-# [추가된 시트 선택 로직]
 ws = None
 if uploaded_file and master_data:
     try:
         if uploaded_file.name.endswith('.csv'):
             st.warning("CSV 파일은 셀 서식이 유지되지 않을 수 있습니다.")
         else:
-            # 서식 유지를 위해 read_only=True 제거
-            wb = openpyxl.load_workbook(uploaded_file)
-            # 시트 선택 기능 추가
-            selected_sheet = st.selectbox("작업할 시트를 선택하세요", wb.sheetnames)
-            ws = wb[selected_sheet]
+            # 엑셀 파일 로드 (openpyxl은 .xlsx만 지원하므로 예외처리)
+            try:
+                wb = openpyxl.load_workbook(uploaded_file)
+                selected_sheet = st.selectbox("작업할 시트를 선택하세요", wb.sheetnames)
+                ws = wb[selected_sheet]
+            except Exception as e:
+                st.error("오류: 업로드한 파일이 유효한 .xlsx 형식이 아닙니다. 엑셀에서 [다른 이름으로 저장]을 눌러 .xlsx로 저장한 후 다시 업로드해주세요.")
+                st.stop()
 
         if ws and st.button("단가 매칭 실행", type="primary"):
-            c_name = column_index_from_string(col_name_str.upper())
-            c_spec = column_index_from_string(col_spec_str.upper())
-            c_mat = column_index_from_string(col_mat_str.upper())
-            c_lab = column_index_from_string(col_lab_str.upper())
-            c_exp = column_index_from_string(col_exp_str.upper())
+            # 입력받은 열 알파벳 처리 (공백 제거 및 대문자 변환)
+            c_name = column_index_from_string(col_name_str.strip().upper())
+            c_spec = column_index_from_string(col_spec_str.strip().upper())
+            c_mat = column_index_from_string(col_mat_str.strip().upper())
+            c_lab = column_index_from_string(col_lab_str.strip().upper())
+            c_exp = column_index_from_string(col_exp_str.strip().upper())
 
-            if uploaded_file.name.endswith('.csv'):
-                st.error("CSV 직접 수정은 서식 파괴 위험이 있어 .xlsx 파일 사용을 권장합니다.")
-            else:
-                count = 0
-                # 수직 중앙 정렬(vertical='center') 및 수평 우측 정렬(horizontal='right') 설정
-                cell_style = Alignment(horizontal='right', vertical='center') 
-                number_fmt = '#,##0'
+            count = 0
+            cell_style = Alignment(horizontal='right', vertical='center') 
+            number_fmt = '#,##0'
 
-                for row in range(start_row, ws.max_row + 1):
-                    val_a = str(ws.cell(row=row, column=c_name).value or "").strip()
-                    val_b = str(ws.cell(row=row, column=c_spec).value or "").strip()
-                    key = f"{val_a}_{val_b}"
+            for row in range(start_row, ws.max_row + 1):
+                val_a = str(ws.cell(row=row, column=c_name).value or "").strip()
+                val_b = str(ws.cell(row=row, column=c_spec).value or "").strip()
+                key = f"{val_a}_{val_b}"
+                
+                if key in master_data:
+                    # 데이터 입력 (입력하신 열 위치로 정확히 매핑)
+                    ws.cell(row=row, column=c_mat).value = float(str(master_data[key]['E']).replace(',', ''))
+                    ws.cell(row=row, column=c_mat).number_format = number_fmt
+                    ws.cell(row=row, column=c_mat).alignment = cell_style
                     
-                    if key in master_data:
-                        # 1. 재료비 처리
-                        cell_mat = ws.cell(row=row, column=c_mat)
-                        cell_mat.value = float(str(master_data[key]['E']).replace(',', ''))
-                        cell_mat.number_format = number_fmt
-                        cell_mat.alignment = cell_style
-                        
-                        # 2. 노무비 처리
-                        cell_lab = ws.cell(row=row, column=c_lab)
-                        cell_lab.value = float(str(master_data[key]['G']).replace(',', ''))
-                        cell_lab.number_format = number_fmt
-                        cell_lab.alignment = cell_style
-                        
-                        # 3. 경비 처리
-                        cell_exp = ws.cell(row=row, column=c_exp)
-                        cell_exp.value = float(str(master_data[key]['I']).replace(',', ''))
-                        cell_exp.number_format = number_fmt
-                        cell_exp.alignment = cell_style
-                        
-                        count += 1
-                
-                st.success(f"완료! 총 {count}개의 항목에 단가가 입력되었습니다.")
-                
-                output = BytesIO()
-                wb.save(output)
-                output.seek(0)
-                
-                final_name = f"매칭완료_{uploaded_file.name.split('.')[0]}.{file_ext}"
-                st.download_button(label=f"수정된 파일 다운로드 ({file_ext})", data=output, file_name=final_name)
+                    ws.cell(row=row, column=c_lab).value = float(str(master_data[key]['G']).replace(',', ''))
+                    ws.cell(row=row, column=c_lab).number_format = number_fmt
+                    ws.cell(row=row, column=c_lab).alignment = cell_style
+                    
+                    ws.cell(row=row, column=c_exp).value = float(str(master_data[key]['I']).replace(',', ''))
+                    ws.cell(row=row, column=c_exp).number_format = number_fmt
+                    ws.cell(row=row, column=c_exp).alignment = cell_style
+                    
+                    count += 1
+            
+            st.success(f"완료! 총 {count}개의 항목에 단가가 입력되었습니다.")
+            
+            output = BytesIO()
+            wb.save(output)
+            output.seek(0)
+            
+            final_name = f"매칭완료_{uploaded_file.name.split('.')[0]}.{file_ext}"
+            st.download_button(label=f"수정된 파일 다운로드 ({file_ext})", data=output, file_name=final_name)
             
     except Exception as e:
-        st.error(f"오류: 설정한 열 위치(알파벳)가 올바른지 확인해주세요. 상세: {e}")
+        st.error(f"오류: 열 위치 설정이 올바른지 확인해주세요. (예: A, B, C...) 상세: {e}")
 
 elif uploaded_file and not master_data:
     st.error("마스터 데이터를 불러오지 못했습니다.")
