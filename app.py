@@ -21,7 +21,7 @@ EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2f
 # 제목 및 상단 정보
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
 
-# 3. 마스터 데이터 로드 (E, G, I 모두 공백일 시 제외 로직 추가)
+# 3. 마스터 데이터 로드 (0값은 무시하고, 실제 값이 있는 경우만 가져오도록 수정)
 @st.cache_data(ttl=60)
 def load_master_data(duplicate_option):
     try:
@@ -37,31 +37,41 @@ def load_master_data(duplicate_option):
             g_str = str(row[6]).replace(',', '').strip() if pd.notna(row[6]) else ""
             i_str = str(row[8]).replace(',', '').strip() if pd.notna(row[8]) else ""
             
-            # [수정] E, G, I 모두 비어있으면 이 행은 무시
-            if e_str == "" and g_str == "" and i_str == "":
-                continue
-            
-            # 숫자 변환 시도 (비어있으면 0으로 처리)
+            # 숫자 변환
             try:
                 e_val = float(e_str) if e_str != "" else 0
                 g_val = float(g_str) if g_str != "" else 0
                 i_val = float(i_str) if i_str != "" else 0
-                
-                if key not in temp_data:
-                    temp_data[key] = {'E': [], 'G': [], 'I': []}
-                
-                temp_data[key]['E'].append(e_val)
-                temp_data[key]['G'].append(g_val)
-                temp_data[key]['I'].append(i_val)
             except ValueError:
                 continue 
+            
+            # E, G, I 모두 0이거나 비어있으면 이 행은 무시
+            if e_val == 0 and g_val == 0 and i_val == 0:
+                continue
+                
+            if key not in temp_data:
+                temp_data[key] = {'E': [], 'G': [], 'I': []}
+            
+            # 0보다 큰 값만 리스트에 추가
+            if e_val > 0: temp_data[key]['E'].append(e_val)
+            if g_val > 0: temp_data[key]['G'].append(g_val)
+            if i_val > 0: temp_data[key]['I'].append(i_val)
         
         master_data = {}
         for key, values in temp_data.items():
+            # 리스트가 비어있으면 0 처리, 아니면 min/max 적용
             if duplicate_option == "최저가 적용":
-                master_data[key] = {'E': min(values['E']), 'G': min(values['G']), 'I': min(values['I'])}
+                master_data[key] = {
+                    'E': min(values['E']) if values['E'] else 0,
+                    'G': min(values['G']) if values['G'] else 0,
+                    'I': min(values['I']) if values['I'] else 0
+                }
             else:
-                master_data[key] = {'E': max(values['E']), 'G': max(values['G']), 'I': max(values['I'])}
+                master_data[key] = {
+                    'E': max(values['E']) if values['E'] else 0,
+                    'G': max(values['G']) if values['G'] else 0,
+                    'I': max(values['I']) if values['I'] else 0
+                }
         return master_data
     except Exception as e: 
         st.error(f"데이터 로드 실패: {e}")
@@ -150,17 +160,21 @@ if uploaded_file and master_data:
                 key = f"{val_a}_{val_b}"
                 
                 if key in master_data:
-                    ws.cell(row=row, column=c_mat).value = master_data[key]['E']
-                    ws.cell(row=row, column=c_mat).number_format = number_fmt
-                    ws.cell(row=row, column=c_mat).alignment = cell_style
+                    # 0보다 큰 데이터가 있는 경우에만 입력 (0인 경우 입력 안 함)
+                    if master_data[key]['E'] > 0:
+                        ws.cell(row=row, column=c_mat).value = master_data[key]['E']
+                        ws.cell(row=row, column=c_mat).number_format = number_fmt
+                        ws.cell(row=row, column=c_mat).alignment = cell_style
                     
-                    ws.cell(row=row, column=c_lab).value = master_data[key]['G']
-                    ws.cell(row=row, column=c_lab).number_format = number_fmt
-                    ws.cell(row=row, column=c_lab).alignment = cell_style
+                    if master_data[key]['G'] > 0:
+                        ws.cell(row=row, column=c_lab).value = master_data[key]['G']
+                        ws.cell(row=row, column=c_lab).number_format = number_fmt
+                        ws.cell(row=row, column=c_lab).alignment = cell_style
                     
-                    ws.cell(row=row, column=c_exp).value = master_data[key]['I']
-                    ws.cell(row=row, column=c_exp).number_format = number_fmt
-                    ws.cell(row=row, column=c_exp).alignment = cell_style
+                    if master_data[key]['I'] > 0:
+                        ws.cell(row=row, column=c_exp).value = master_data[key]['I']
+                        ws.cell(row=row, column=c_exp).number_format = number_fmt
+                        ws.cell(row=row, column=c_exp).alignment = cell_style
                     
                     count += 1
             
