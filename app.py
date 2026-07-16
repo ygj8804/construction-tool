@@ -6,7 +6,7 @@ from openpyxl.utils import column_index_from_string
 from datetime import datetime
 from openpyxl.styles import Alignment
 
-# [정제 함수 추가] 눈에 보이지 않는 공백 및 특수문자 제거
+# [정제 함수] 눈에 보이지 않는 공백 및 특수문자 제거
 def clean_text(text):
     if pd.isna(text): return ""
     return str(text).replace('\xa0', ' ').strip()
@@ -21,7 +21,7 @@ EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2f
 # 제목 및 상단 정보
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
 
-# 3. 마스터 데이터 로드 (오류 방지 로직 보완)
+# 3. 마스터 데이터 로드 (E, G, I 모두 공백일 시 제외 로직 추가)
 @st.cache_data(ttl=60)
 def load_master_data(duplicate_option):
     try:
@@ -29,27 +29,35 @@ def load_master_data(duplicate_option):
         temp_data = {} 
         
         for _, row in df.iterrows():
-            # 키 생성 시 정제 함수 적용
+            # 키 생성
             key = f"{clean_text(row[0])}_{clean_text(row[1])}"
-            if key not in temp_data:
-                temp_data[key] = {'E': [], 'G': [], 'I': []}
             
-            # 숫자 데이터만 추출
+            # E(4), G(6), I(8) 행의 값을 문자열로 추출하여 정리
+            e_str = str(row[4]).replace(',', '').strip() if pd.notna(row[4]) else ""
+            g_str = str(row[6]).replace(',', '').strip() if pd.notna(row[6]) else ""
+            i_str = str(row[8]).replace(',', '').strip() if pd.notna(row[8]) else ""
+            
+            # [수정] E, G, I 모두 비어있으면 이 행은 무시
+            if e_str == "" and g_str == "" and i_str == "":
+                continue
+            
+            # 숫자 변환 시도 (비어있으면 0으로 처리)
             try:
-                e_val = float(str(row[4]).replace(',', ''))
-                g_val = float(str(row[6]).replace(',', ''))
-                i_val = float(str(row[8]).replace(',', ''))
+                e_val = float(e_str) if e_str != "" else 0
+                g_val = float(g_str) if g_str != "" else 0
+                i_val = float(i_str) if i_str != "" else 0
+                
+                if key not in temp_data:
+                    temp_data[key] = {'E': [], 'G': [], 'I': []}
                 
                 temp_data[key]['E'].append(e_val)
                 temp_data[key]['G'].append(g_val)
                 temp_data[key]['I'].append(i_val)
-            except:
+            except ValueError:
                 continue 
         
         master_data = {}
         for key, values in temp_data.items():
-            if not values['E']: continue 
-            
             if duplicate_option == "최저가 적용":
                 master_data[key] = {'E': min(values['E']), 'G': min(values['G']), 'I': min(values['I'])}
             else:
@@ -137,7 +145,6 @@ if uploaded_file and master_data:
             number_fmt = '#,##0'
 
             for row in range(start_row, ws.max_row + 1):
-                # 키 생성 시에도 정제 함수 적용
                 val_a = clean_text(ws.cell(row=row, column=c_name).value)
                 val_b = clean_text(ws.cell(row=row, column=c_spec).value)
                 key = f"{val_a}_{val_b}"
