@@ -14,6 +14,10 @@ def clean_text(text):
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
+# 세션 상태 초기화 (동기화 시간 저장용)
+if 'sync_time' not in st.session_state:
+    st.session_state.sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
 # [데이터 연결 주소]
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
 EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2fCRSt/edit?rtpof=true"
@@ -111,10 +115,11 @@ with st.expander("⚙️ [설정] 데이터 시작 행 및 각 항목별 위치 
 master_data = load_master_data(duplicate_option)
 
 with col_info:
-    st.info(f"📋 마스터 데이터 기준 시간 (데이터동기화완료): {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    st.info(f"📋 마스터 데이터 기준 시간 (데이터동기화완료): {st.session_state.sync_time}")
     # 마스터 데이터 동기화 버튼 추가
     if st.button("🔄 마스터 데이터 강제 동기화"):
         st.cache_data.clear()
+        st.session_state.sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         st.rerun()
         
     if master_data:
