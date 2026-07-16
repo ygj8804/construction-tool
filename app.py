@@ -94,6 +94,11 @@ master_data = load_master_data(duplicate_option)
 
 with col_info:
     st.info(f"📋 마스터 데이터 기준 시간 (데이터동기화완료): {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    # 마스터 데이터 동기화 버튼 추가
+    if st.button("🔄 마스터 데이터 강제 동기화"):
+        st.cache_data.clear()
+        st.rerun()
+        
     if master_data:
         st.metric("총 마스터 데이터 항목", f"{len(master_data):,} 개")
 
