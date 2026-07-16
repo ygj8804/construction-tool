@@ -3,7 +3,7 @@ import pandas as pd
 import openpyxl
 from io import BytesIO
 from openpyxl.utils import column_index_from_string
-from datetime import datetime
+from datetime import datetime, timedelta
 from openpyxl.styles import Alignment
 
 # [정제 함수] 눈에 보이지 않는 공백 및 특수문자 제거
@@ -14,9 +14,13 @@ def clean_text(text):
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
 
+# 한국 시간(KST)으로 현재 시간을 가져오는 함수
+def get_kst_now():
+    return (datetime.utcnow() + timedelta(hours=9)).strftime('%Y-%m-%d %H:%M:%S')
+
 # 세션 상태 초기화 (동기화 시간 저장용)
 if 'sync_time' not in st.session_state:
-    st.session_state.sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    st.session_state.sync_time = get_kst_now()
 
 # [데이터 연결 주소]
 DATA_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT0RF-nXszGyvIIHGPfFJtgOvCnZrA_6A44Sq21te9CrOQuxYD_1Q5zO-9aZHLoHw/pub?gid=1069214405&single=true&output=csv"
@@ -119,7 +123,7 @@ with col_info:
     # 마스터 데이터 동기화 버튼 추가
     if st.button("🔄 마스터 데이터 강제 동기화"):
         st.cache_data.clear()
-        st.session_state.sync_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        st.session_state.sync_time = get_kst_now()
         st.rerun()
         
     if master_data:
