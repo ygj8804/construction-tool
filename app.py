@@ -5,11 +5,13 @@ from io import BytesIO
 from openpyxl.utils import column_index_from_string
 from datetime import datetime, timedelta
 from openpyxl.styles import Alignment
+import re  # 특수문자 제거를 위해 추가
 
-# [정제 함수] 눈에 보이지 않는 공백 및 특수문자 제거
-def clean_text(text):
+# [강력 정제 함수] 모든 공백, 특수문자 제거 및 대소문자 통일
+def normalize_key(text):
     if pd.isna(text): return ""
-    return str(text).replace('\xa0', ' ').strip()
+    # 모든 공백, 탭, 특수문자(하이픈 등)를 제거하고 대문자로 변환
+    return re.sub(r'[\s\W_]+', '', str(text)).upper()
 
 # 1. 페이지 설정
 st.set_page_config(page_title="서원건설 단가 자동 입력기", layout="wide")
@@ -37,8 +39,8 @@ def load_master_data(duplicate_option):
         temp_data = {} 
         
         for _, row in df.iterrows():
-            # 키 생성
-            key = f"{clean_text(row[0])}_{clean_text(row[1])}"
+            # 키 생성 시 강력 정규화 적용 (normalize_key 사용)
+            key = f"{normalize_key(row[0])}_{normalize_key(row[1])}"
             
             # E(4), G(6), I(8) 행의 값을 문자열로 추출하여 정리
             e_str = str(row[4]).replace(',', '').strip() if pd.notna(row[4]) else ""
@@ -164,8 +166,9 @@ if uploaded_file and master_data:
             number_fmt = '#,##0'
 
             for row in range(start_row, ws.max_row + 1):
-                val_a = clean_text(ws.cell(row=row, column=c_name).value)
-                val_b = clean_text(ws.cell(row=row, column=c_spec).value)
+                # 키 생성 시 강력 정규화 적용 (normalize_key 사용)
+                val_a = normalize_key(ws.cell(row=row, column=c_name).value)
+                val_b = normalize_key(ws.cell(row=row, column=c_spec).value)
                 key = f"{val_a}_{val_b}"
                 
                 if key in master_data:
