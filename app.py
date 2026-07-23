@@ -31,7 +31,7 @@ EDIT_URL = "https://docs.google.com/spreadsheets/d/1XR0zYBVOL8PRJjuNvttpbo6WNH2f
 # 제목 및 상단 정보
 st.title("🏗️ 서원건설 - 단가 자동 입력기")
 
-# 3. 마스터 데이터 로드 (0값은 무시하고, 실제 값이 있는 경우만 가져오도록 수정)
+# 3. 마스터 데이터 로드 (같은 아이템일 때 무조건 최저가 적용)
 @st.cache_data(ttl=60)
 def load_master_data(duplicate_option):
     try:
@@ -69,19 +69,12 @@ def load_master_data(duplicate_option):
         
         master_data = {}
         for key, values in temp_data.items():
-            # 리스트가 비어있으면 0 처리, 아니면 min/max 적용
-            if duplicate_option == "최저가 적용":
-                master_data[key] = {
-                    'E': min(values['E']) if values['E'] else 0,
-                    'G': min(values['G']) if values['G'] else 0,
-                    'I': min(values['I']) if values['I'] else 0
-                }
-            else:
-                master_data[key] = {
-                    'E': max(values['E']) if values['E'] else 0,
-                    'G': max(values['G']) if values['G'] else 0,
-                    'I': max(values['I']) if values['I'] else 0
-                }
+            # UI 옵션 조건과 관계없이 무조건 min(최저가)으로 고정 추출
+            master_data[key] = {
+                'E': min(values['E']) if values['E'] else 0,
+                'G': min(values['G']) if values['G'] else 0,
+                'I': min(values['I']) if values['I'] else 0
+            }
         return master_data
     except Exception as e: 
         st.error(f"데이터 로드 실패: {e}")
